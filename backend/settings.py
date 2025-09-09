@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'maker',
     'cloudinary',
     'cloudinary_storage',
+    'subscription'
 ]
 
 MIDDLEWARE = [
@@ -159,3 +160,6 @@ CLOUDINARY_STORAGE = {
 }
 
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+RAZORPAY_KEY_ID = 'your_razorpay_key_id_here'
+RAZORPAY_KEY_SECRET = 'your_razorpay_key_secret_here'

@@ -156,7 +156,7 @@ def create_quotation(request, project_id):
 
         data = json.loads(request.body)
 
-        required_fields = ['amount', 'completionDate', 'description', 'pdfUrl']
+        required_fields = ['amount', 'completionDate', 'description']
         for field in required_fields:
             if field not in data or not data[field]:
                 return JsonResponse({"error": f"Missing required field: {field}"}, status=400)

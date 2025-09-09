@@ -24,4 +24,5 @@ urlpatterns = [
     path('buyer/',include('buyer.urls')),
     path('maker/',include('maker.urls')),
     path("csrf/", csrf, name="csrf"), 
+    path("subscriptions/", include("subscription.urls"))
 ]

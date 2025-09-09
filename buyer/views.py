@@ -20,9 +20,6 @@ def execute_query(query, params=()):
         connection.commit()
         return cursor.lastrowid
 
-# ----------------------------
-# Projects (listed_work)
-# ----------------------------
 def get_projects(request):
     try:
         user_id = request.session.get("user_id")
@@ -40,9 +37,9 @@ def get_projects(request):
                    state,
                    city,
                    pdf_report AS pdfUrl,
-                   'Active' AS status
+                   status
             FROM listed_work
-            WHERE user_id=%s
+            WHERE user_id=%s AND status='Active'
         """
         projects = fetch_all(query, [user_id])
         return JsonResponse(projects, safe=False)
@@ -110,21 +107,44 @@ def get_completed_orders(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
     query = """
-        SELECT cw.completed_id AS id,
-               lw.title AS projectName,
-               u.name AS makerName,
-               cw.price AS amount,
-               cw.completion_date AS completionDate
+        SELECT 
+            cw.completed_work_id AS completedId,
+            cw.price AS amount,
+            cw.completion_date AS completionDate,
+            cw.pdf_report AS report,
+            cw.title AS projectName,
+            cw.description AS projectDescription,
+            cw.created_at AS workCreatedAt,
+
+            -- Quotation details
+            q.quotation_id AS quotationId,
+            q.price AS quotationAmount,
+            q.description AS quotationMessage,
+            q.created_at AS quotationCreatedAt,
+
+            -- Maker details
+            maker.user_id AS makerId,
+            maker.name AS makerName,
+            maker.email AS makerEmail,
+
+            -- Buyer details
+            buyer.user_id AS buyerId,
+            buyer.name AS buyerName,
+            buyer.email AS buyerEmail
+
         FROM completed_work cw
-        JOIN listed_work lw ON cw.work_id = lw.work_id
-        JOIN users u ON cw.maker_id = u.user_id
-        WHERE cw.user_id=%s
+        JOIN users maker ON cw.maker_id = maker.user_id
+        JOIN users buyer ON cw.user_id = buyer.user_id
+        LEFT JOIN quotation q ON cw.quotation_id = q.quotation_id
+        WHERE cw.user_id = %s
     """
+
     orders = fetch_all(query, [user_id])
     return JsonResponse(orders, safe=False)
 
 # ----------------------------
-# Quotations
+# ----------------------------
+# Get Quotations for a Project
 # ----------------------------
 @csrf_exempt
 def get_project_quotations(request, project_id):
@@ -133,41 +153,45 @@ def get_project_quotations(request, project_id):
         if not user_id:
             return JsonResponse({"error": "Unauthorized"}, status=401)
 
-        # Check if user owns the project
+        # Ensure project belongs to logged-in user
         query = "SELECT user_id FROM listed_work WHERE work_id = %s"
         result = fetch_all(query, [project_id])
-        
         if not result or result[0]['user_id'] != user_id:
             return JsonResponse({"error": "Not authorized"}, status=403)
 
-        # Get quotations for the project
+        # Fetch quotations with maker details
         query = """
-            SELECT quotation_id, work_id, maker_id, description, 
-                   pdf_quotation, price, estimated_date, created_at
-            FROM quotation 
-            WHERE work_id = %s
+        SELECT q.quotation_id, q.work_id, q.maker_id, q.description, 
+               q.pdf_quotation, q.price, q.estimated_date, q.status, q.created_at,
+               u.name AS maker_name, u.email AS maker_email, u.phone AS maker_phone,
+               mcd.address AS maker_address
+        FROM quotation q
+        JOIN users u ON q.maker_id = u.user_id
+        LEFT JOIN maker_company_details mcd ON q.maker_id = mcd.maker_id
+        WHERE q.work_id = %s
         """
         quotations = fetch_all(query, [project_id])
-        
-        # Convert date fields to strings for JSON serialization
-        for quotation in quotations:
-            if quotation['estimated_date']:
-                quotation['estimated_date'] = quotation['estimated_date'].isoformat()
-            if quotation['created_at']:
-                quotation['created_at'] = quotation['created_at'].isoformat()
-            
-            # Generate full URL for PDF if exists
-            if quotation['pdf_quotation']:
-                quotation['pdf_quotation'] = request.build_absolute_uri(
-                    f"/media/{quotation['pdf_quotation']}"
-                )
-        
+
+        # Convert date fields & build URLs
+        for q in quotations:
+            if q["estimated_date"]:
+                q["estimated_date"] = q["estimated_date"].isoformat()
+            if q["created_at"]:
+                q["created_at"] = q["created_at"].isoformat()
+            if q["pdf_quotation"]:
+                q["pdf_quotation"] = request.build_absolute_uri(f"/media/{q['pdf_quotation']}")
+
         return JsonResponse(quotations, safe=False)
-        
+
     except Exception as e:
-        print("Error in get_project_quotations:", e)
+        import traceback
+        print("Error in get_project_quotations:", traceback.format_exc())
         return JsonResponse({"error": str(e)}, status=500)
 
+
+# ----------------------------
+# Accept a Quotation
+# ----------------------------
 @csrf_exempt
 def accept_quotation(request, quotation_id):
     try:
@@ -175,59 +199,74 @@ def accept_quotation(request, quotation_id):
         if not user_id:
             return JsonResponse({"error": "Unauthorized"}, status=401)
 
-        # Get quotation details and verify ownership
+        # Get quotation + project details
         query = """
-            SELECT q.work_id, q.maker_id, q.price, q.estimated_date,
-                   lw.user_id
+            SELECT q.quotation_id, q.work_id, q.maker_id, q.price, q.estimated_date,
+                   lw.user_id, lw.title, lw.description, lw.pdf_report
             FROM quotation q
             JOIN listed_work lw ON q.work_id = lw.work_id
             WHERE q.quotation_id = %s
         """
         result = fetch_all(query, [quotation_id])
-        
         if not result:
             return JsonResponse({"error": "Quotation not found"}, status=404)
-        
-        quotation_data = result[0]
-        work_id = quotation_data['work_id']
-        maker_id = quotation_data['maker_id']
-        price = quotation_data['price']
-        estimated_date = quotation_data['estimated_date']
-        project_owner_id = quotation_data['user_id']
 
-        # Verify the user owns the project
+        q_data = result[0]
+        work_id = q_data["work_id"]
+        maker_id = q_data["maker_id"]
+        price = q_data["price"]
+        completion_date = q_data["estimated_date"]
+        project_owner_id = q_data["user_id"]
+
+        # Verify project ownership
         if project_owner_id != user_id:
             return JsonResponse({"error": "Not authorized"}, status=403)
 
-        # Create a new completed order
-        query = """
-            INSERT INTO completed_work (work_id, user_id, maker_id, price, completion_date)
-            VALUES (%s, %s, %s, %s, %s)
+        # Insert into completed_work
+        insert_query = """
+            INSERT INTO completed_work 
+            (user_id, maker_id, quotation_id, title, description, completion_date, price, pdf_report, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """
-        execute_query(query, [work_id, user_id, maker_id, price, estimated_date])
-        
-        # Update the quotation status to accepted
-        query = "UPDATE quotation SET status = 'accepted' WHERE quotation_id = %s"
-        execute_query(query, [quotation_id])
-        
-        # Update all other quotations for this project to rejected
-        query = "UPDATE quotation SET status = 'rejected' WHERE work_id = %s AND quotation_id != %s"
-        execute_query(query, [work_id, quotation_id])
-        
-        # Update the project status to completed
-        query = "UPDATE listed_work SET status = 'completed' WHERE work_id = %s"
-        execute_query(query, [work_id])
-        
-        return JsonResponse({"message": "Quotation accepted successfully"})
-        
-    except Exception as e:
-        print("Error in accept_quotation:", e)
-        return JsonResponse({"error": str(e)}, status=500)
+        # Convert completion_date to string
+        completion_date_str = completion_date.isoformat() if completion_date else None
+        params = [
+            user_id,
+            maker_id,
+            q_data["quotation_id"],
+            q_data["title"],
+            q_data["description"],
+            completion_date_str,
+            price,
+            q_data["pdf_report"]
+        ]
+        execute_query(insert_query, params)
 
+        # ✅ Update listed_work status to 'Completed' instead of deleting
+        update_project_status = """
+            UPDATE listed_work
+            SET status = 'Completed'
+            WHERE work_id = %s
+        """
+        execute_query(update_project_status, [work_id])
+
+        # Update quotation statuses
+        execute_query("UPDATE quotation SET status = 'accepted' WHERE quotation_id = %s", [quotation_id])
+        execute_query(
+            "UPDATE quotation SET status = 'rejected' WHERE work_id = %s AND quotation_id != %s",
+            [work_id, quotation_id]
+        )
+
+        return JsonResponse({"message": "Quotation accepted, project marked as completed"}, status=200)
+
+    except Exception as e:
+        import traceback
+        print("Error in accept_quotation:", traceback.format_exc())
+        return JsonResponse({"error": str(e)}, status=500)
 # ----------------------------
 # File Upload
 # ----------------------------
-import cloudinary.uploader
+import cloudinary.uploader # type: ignore
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 
