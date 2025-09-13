@@ -1,5 +1,5 @@
 import json
-import razorpay
+import razorpay # type: ignore
 import datetime
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -57,11 +57,11 @@ def create_payment(request):
         'payment_capture': 1
     })
 
-    # Save payment record (make sure you have subscription_payments table)
+    # Save payment record (make sure you have subscription_transactions table)
     with connection.cursor() as cursor:
         cursor.execute("""
-            INSERT INTO subscription_payments 
-            (user_id, plan, amount, rzp_order_id, status)
+            INSERT INTO subscription_transactions 
+            (user_id, plan, amount, razorpay_order_id, status)
             VALUES (%s, %s, %s, %s, 'pending')
         """, [user_id, plan, prices[plan] / 100, order['id']])
 
@@ -78,17 +78,17 @@ def verify_payment(request):
     user_id = request.session.get("user_id")
     data = json.loads(request.body)
 
-    rzp_order_id = data.get('rzp_order_id')
-    rzp_payment_id = data.get('rzp_payment_id')
-    rzp_signature = data.get('rzp_signature')
+    razorpay_order_id = data.get('razorpay_order_id')
+    razorpay_payment_id = data.get('razorpay_payment_id')
+    razorpay_signature = data.get('razorpay_signature')
     plan = data.get('plan')
 
     # Verify payment signature
     try:
         razorpay_client.utility.verify_payment_signature({
-            'razorpay_order_id': rzp_order_id,
-            'razorpay_payment_id': rzp_payment_id,
-            'razorpay_signature': rzp_signature
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
         })
     except:
         return JsonResponse({'error': 'Payment verification failed'}, status=400)
@@ -96,10 +96,10 @@ def verify_payment(request):
     # Update payment record
     with connection.cursor() as cursor:
         cursor.execute("""
-            UPDATE subscription_payments 
-            SET rzp_payment_id = %s, status = 'success'
-            WHERE rzp_order_id = %s AND user_id = %s
-        """, [rzp_payment_id, rzp_order_id, user_id])
+            UPDATE subscription_transactions 
+            SET razorpay_payment_id = %s, status = 'success'
+            WHERE razorpay_order_id = %s AND user_id = %s
+        """, [razorpay_payment_id, razorpay_order_id, user_id])
 
     # Activate subscription
     start_date = datetime.date.today()

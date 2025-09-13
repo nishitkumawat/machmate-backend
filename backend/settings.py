@@ -161,5 +161,5 @@ CLOUDINARY_STORAGE = {
 
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
-RAZORPAY_KEY_ID = 'your_razorpay_key_id_here'
-RAZORPAY_KEY_SECRET = 'your_razorpay_key_secret_here'
+RAZORPAY_KEY_ID = os.getenv("RZ_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RZ_SECRET")

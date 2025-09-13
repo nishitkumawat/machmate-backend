@@ -82,21 +82,67 @@ def create_project(request):
         execute_query(query, [user_id, name, description, maxPrice, estimatedDate, address, state, city, pdf_url])
 
         return JsonResponse({"message": "Project created", "pdf_url": pdf_url}, status=201)
-    
+
+
 @csrf_exempt
 def update_project(request, project_id):
-    if request.method == "PUT":
-        data = json.loads(request.body)
-
-        query = """
-            UPDATE listed_work
-            SET title=%s, description=%s, estimated_price=%s, estimated_date=%s
-            WHERE work_id=%s
-        """
-        execute_query(query, [
-            data["name"], data["description"], data["maxPrice"], data["estimatedDate"], project_id
-        ])
-        return JsonResponse({"message": "Project updated"}, status=200)
+    if request.method == "POST":  # Changed from PUT to POST
+        try:
+            # Now request.POST will be populated automatically
+            name = request.POST.get("name")
+            description = request.POST.get("description")
+            maxPrice = request.POST.get("maxPrice")
+            estimatedDate = request.POST.get("estimatedDate")
+            address = request.POST.get("address")
+            state = request.POST.get("state")
+            city = request.POST.get("city")
+            
+            # Handle file upload if present
+            pdf_url = None
+            if 'pdf' in request.FILES:
+                pdf_file = request.FILES['pdf']
+                # Upload to Cloudinary like in create_project
+                result = cloudinary.uploader.upload(
+                    pdf_file,
+                    resource_type="raw"  # Required for PDF/other non-image files
+                )
+                pdf_url = result.get("secure_url", "")
+            
+            # Build the SQL query based on whether we have a new PDF
+            if pdf_url:
+                query = """
+                    UPDATE listed_work
+                    SET title=%s, description=%s, estimated_price=%s, estimated_date=%s,
+                        address=%s, state=%s, city=%s, pdf_report=%s
+                    WHERE work_id=%s
+                """
+                params = [
+                    name, description, maxPrice, estimatedDate, 
+                    address, state, city, pdf_url, project_id
+                ]
+            else:
+                query = """
+                    UPDATE listed_work
+                    SET title=%s, description=%s, estimated_price=%s, estimated_date=%s,
+                        address=%s, state=%s, city=%s
+                    WHERE work_id=%s
+                """
+                params = [
+                    name, description, maxPrice, estimatedDate, 
+                    address, state, city, project_id
+                ]
+            
+            # Validate required fields
+            if not all([name, description, maxPrice, estimatedDate]):
+                return JsonResponse({"error": "Missing required fields"}, status=400)
+            
+            execute_query(query, params)
+            return JsonResponse({"message": "Project updated"}, status=200)
+            
+        except Exception as e:
+            import traceback
+            print("Error in update_project:", traceback.format_exc())
+            return JsonResponse({"error": str(e)}, status=500)
 
 # ----------------------------
 # Completed Orders (completed_work)
