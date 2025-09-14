@@ -91,7 +91,7 @@ def create_payment(request):
             cursor.execute("""
                 INSERT INTO subscription_transactions
                 (user_id, plan, amount, razorpay_order_id, status, created_at)
-                VALUES (%s, %s, %s, %s, 'created', %s)
+                VALUES (%s, %s, %s, %s, 'pending', %s)
             """, [user_id, plan, prices[plan]/100, order['id'], datetime.datetime.now()])
 
         return JsonResponse({
