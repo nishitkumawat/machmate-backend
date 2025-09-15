@@ -69,11 +69,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",   # React dev server
     "https://machmate.in",
     "https://www.machmate.in",
+    "https://machmate-backend.onrender.com"
 ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://machmate.in",
     "https://www.machmate.in",
+    "https://machmate-backend.onrender.com"
 ]
 
 TEMPLATES = [
@@ -140,3 +142,15 @@ DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 # Razorpay
 RAZORPAY_KEY_ID = os.getenv("RZ_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RZ_SECRET")
+
+# Session & CSRF cookies (important for cross-domain auth)
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# Allow cookies to be sent across domains (Netlify <-> Render)
+SESSION_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SAMESITE = "None"
+
+# Optional: rename cookies if you want clarity
+SESSION_COOKIE_NAME = "machmate_sessionid"
+CSRF_COOKIE_NAME = "machmate_csrftoken"
