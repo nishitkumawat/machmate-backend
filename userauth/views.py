@@ -333,51 +333,7 @@ def change_password(request):
                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 otp_storage = {}
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def send_email_otp(request):
-    email = request.data.get("email")
-    
-    if not email:
-        return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Generate 6-digit OTP
-    otp = str(random.randint(100000, 999999))
-    
-    # Store OTP temporarily
-    otp_storage[email] = otp
-    
-    # Send email with OTP
-    try:
-        send_mail(
-            'Your MachMate Verification Code',
-            f'Your OTP for verification is: {otp}',
-            'noreply@machmate.com',
-            [email],
-            fail_silently=False,
-        )
-        return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({"error": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def verify_email_otp(request):
-    email = request.data.get("email")
-    otp = request.data.get("otp")
-    
-    if not email or not otp:
-        return Response({"error": "Email and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Verify OTP
-    if email in otp_storage and otp_storage[email] == otp:
-        # Remove OTP after successful verification
-        del otp_storage[email]
-        return Response({"message": "Email verified successfully"}, status=status.HTTP_200_OK)
-    else:
-        return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
-
+# Send Phone OTP
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def send_phone_otp(request):
@@ -386,18 +342,21 @@ def send_phone_otp(request):
     if not phone:
         return Response({"error": "Phone is required"}, status=status.HTTP_400_BAD_REQUEST)
     
-    # In a real implementation, you would integrate with an SMS service
-    # For now, we'll just return a static OTP for demo
+    # For now, use static OTP
     otp = "123456"
     
     # Store OTP temporarily
     otp_storage[phone] = otp
     
+    # ⚠️ In production, send via SMS provider (Twilio, MSG91, etc.)
     return Response({
-        "message": "OTP sent successfully", 
-        "otp": otp  # Remove this in production - only for demo
+        "success": True,
+        "message": "OTP sent successfully",
+        "otp": otp  # ❌ return only for testing, remove in production
     }, status=status.HTTP_200_OK)
 
+
+# Verify Phone OTP
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_phone_otp(request):
@@ -405,12 +364,94 @@ def verify_phone_otp(request):
     otp = request.data.get("otp")
     
     if not phone or not otp:
-        return Response({"error": "Phone and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"success": False, "error": "Phone and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
     
     # Verify OTP
     if phone in otp_storage and otp_storage[phone] == otp:
-        # Remove OTP after successful verification
         del otp_storage[phone]
-        return Response({"message": "Phone verified successfully"}, status=status.HTTP_200_OK)
+        return Response({"success": True, "message": "Phone verified successfully"}, status=status.HTTP_200_OK)
     else:
-        return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"success": False, "error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def send_email_otp(request):
+    email = request.data.get("email")
+    
+    if not email:
+        return Response({"success": False, "error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    otp = str(random.randint(100000, 999999))
+    otp_storage[email] = otp
+    
+    try:
+        send_mail(
+            'Your MachMate Verification Code',
+            f'Your OTP for verification is: {otp}',
+            'noreply@machmate.com',
+            [email],
+            fail_silently=False,
+        )
+        return Response({"success": True, "message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+    except Exception:
+        return Response({"success": False, "error": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def verify_email_otp(request):
+    email = request.data.get("email")
+    otp = request.data.get("otp")
+    
+    if not email or not otp:
+        return Response({"success": False, "error": "Email and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if email in otp_storage and otp_storage[email] == otp:
+        del otp_storage[email]
+        return Response({"success": True, "message": "Email verified successfully"}, status=status.HTTP_200_OK)
+    else:
+        return Response({"success": False, "error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+from django.views.decorators.csrf import csrf_exempt
+
+import json, re
+from django.http import JsonResponse
+from django.contrib.auth.hashers import make_password
+from django.views.decorators.csrf import csrf_exempt
+from django.db import connection
+@csrf_exempt
+def reset_password(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            email = data.get("email")
+            phone = data.get("phone")
+            new_password = data.get("new_password")
+
+            # ✅ must send either email or phone
+            if not new_password or (not email and not phone):
+                return JsonResponse({"success": False, "message": "Missing fields"}, status=400)
+
+            # ✅ password validation
+            if len(new_password) < 8:
+                return JsonResponse({"success": False, "message": "Password must be at least 8 characters"}, status=400)
+            if not re.search(r"[A-Z]", new_password):
+                return JsonResponse({"success": False, "message": "Password must contain at least one uppercase letter"}, status=400)
+            if not re.search(r"[@$!%*?&]", new_password):
+                return JsonResponse({"success": False, "message": "Password must contain at least one special character"}, status=400)
+
+            # ✅ hash password
+            hashed_password = make_password(new_password)
+
+            # ✅ update DB
+            with connection.cursor() as cursor:
+                if email:
+                    cursor.execute("UPDATE users SET password = %s WHERE email = %s", [hashed_password, email])
+                else:
+                    cursor.execute("UPDATE users SET password = %s WHERE phone = %s", [hashed_password, phone])
+
+            return JsonResponse({"success": True, "message": "Password reset successful"})
+
+        except Exception as e:
+            return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+    return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
