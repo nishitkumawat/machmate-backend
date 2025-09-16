@@ -1,3 +1,4 @@
+import random
 import re
 from django.db import connection
 from django.contrib.auth.hashers import make_password, check_password
@@ -5,7 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-
+from django.core.mail import send_mail
 
 # ✅ REGISTER VIEW
 @api_view(["POST"])
@@ -44,8 +45,8 @@ def register_view(request):
     try:
         with connection.cursor() as cursor:
             # Check if user already exists
-            cursor.execute("SELECT user_id FROM users WHERE name=%s OR email=%s OR phone=%s",
-                           [name, email, phone])
+            cursor.execute("SELECT user_id FROM users WHERE email=%s OR phone=%s",
+                           [ email, phone])
             if cursor.fetchone():
                 return Response({"error": "name, email or phone already exists"},
                                 status=status.HTTP_400_BAD_REQUEST)
@@ -330,3 +331,86 @@ def change_password(request):
     except Exception as e:
         return Response({"error": str(e)}, 
                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+otp_storage = {}
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def send_email_otp(request):
+    email = request.data.get("email")
+    
+    if not email:
+        return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Generate 6-digit OTP
+    otp = str(random.randint(100000, 999999))
+    
+    # Store OTP temporarily
+    otp_storage[email] = otp
+    
+    # Send email with OTP
+    try:
+        send_mail(
+            'Your MachMate Verification Code',
+            f'Your OTP for verification is: {otp}',
+            'noreply@machmate.com',
+            [email],
+            fail_silently=False,
+        )
+        return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def verify_email_otp(request):
+    email = request.data.get("email")
+    otp = request.data.get("otp")
+    
+    if not email or not otp:
+        return Response({"error": "Email and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Verify OTP
+    if email in otp_storage and otp_storage[email] == otp:
+        # Remove OTP after successful verification
+        del otp_storage[email]
+        return Response({"message": "Email verified successfully"}, status=status.HTTP_200_OK)
+    else:
+        return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def send_phone_otp(request):
+    phone = request.data.get("phone")
+    
+    if not phone:
+        return Response({"error": "Phone is required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # In a real implementation, you would integrate with an SMS service
+    # For now, we'll just return a static OTP for demo
+    otp = "123456"
+    
+    # Store OTP temporarily
+    otp_storage[phone] = otp
+    
+    return Response({
+        "message": "OTP sent successfully", 
+        "otp": otp  # Remove this in production - only for demo
+    }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def verify_phone_otp(request):
+    phone = request.data.get("phone")
+    otp = request.data.get("otp")
+    
+    if not phone or not otp:
+        return Response({"error": "Phone and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Verify OTP
+    if phone in otp_storage and otp_storage[phone] == otp:
+        # Remove OTP after successful verification
+        del otp_storage[phone]
+        return Response({"message": "Phone verified successfully"}, status=status.HTTP_200_OK)
+    else:
+        return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)

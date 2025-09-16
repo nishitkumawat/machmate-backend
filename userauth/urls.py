@@ -11,4 +11,9 @@ urlpatterns = [
     path('profile/update/', views.update_user_profile, name='update_profile'),
     path('profile/change-password/', views.change_password, name='change_password'),
 
+    path('send-email-otp/', views.send_email_otp, name='send_email_otp'),
+    path('verify-email-otp/', views.verify_email_otp, name='verify_email_otp'),
+    path('send-phone-otp/', views.send_phone_otp, name='send_phone_otp'),
+    path('verify-phone-otp/', views.verify_phone_otp, name='verify_phone_otp'),
+
 ]
