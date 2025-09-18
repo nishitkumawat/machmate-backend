@@ -321,77 +321,79 @@ def change_password(request):
         return Response({"error": str(e)}, 
                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-otp_storage = {}
+import random
+import re
+import json
+from django.db import connection
+from django.contrib.auth.hashers import make_password, check_password
+from django.core.mail import send_mail
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+# ------------------------------
+# OTP Storages
+# ------------------------------
+otp_storage = {}          # Used for signup flow
+forgot_otp_storage = {}   # Used for forgot password flow
+
+# ------------------------------
+# ------------------------------ Existing Signup OTP FLOW ------------------------------
+# ------------------------------
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def send_phone_otp(request):
     phone = request.data.get("phone")
-    
     if not phone:
-        return Response({"success": False, "message": "Phone is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response({"success": False, "message": "Phone is required"}, status=400)
+
     try:
-        # Check if user exists
         with connection.cursor() as cursor:
             cursor.execute("SELECT user_id FROM users WHERE phone=%s", [phone])
-            user = cursor.fetchone()
-        
-        if not user:
-            return Response({"success": False, "message": "Phone number does not exist"}, status=status.HTTP_404_NOT_FOUND)
+            if cursor.fetchone():
+                return Response({"success": False, "message": "Phone number already exists"}, status=400)
 
-        # Generate OTP (static for now)
-        otp = "123456"
+        otp = "123456"  # Static OTP for testing
         otp_storage[phone] = otp
 
-        # ⚠️ Send via SMS provider in production
-        return Response({
-            "success": True,
-            "message": "OTP sent successfully",
-            "otp": otp  # ❌ return only for testing, remove in production
-        }, status=status.HTTP_200_OK)
-
+        return Response({"success": True, "message": "OTP sent successfully", "otp": otp}, status=200)
     except Exception as e:
-        return Response({"success": False, "message": f"Failed to send OTP: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"success": False, "message": str(e)}, status=500)
 
-# Verify Phone OTP
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_phone_otp(request):
     phone = request.data.get("phone")
     otp = request.data.get("otp")
-    
     if not phone or not otp:
-        return Response({"success": False, "error": "Phone and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Verify OTP
+        return Response({"success": False, "error": "Phone and OTP are required"}, status=400)
+
     if phone in otp_storage and otp_storage[phone] == otp:
         del otp_storage[phone]
-        return Response({"success": True, "message": "Phone verified successfully"}, status=status.HTTP_200_OK)
-    else:
-        return Response({"success": False, "error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
- 
+        return Response({"success": True, "message": "Phone verified successfully"}, status=200)
+    return Response({"success": False, "error": "Invalid OTP"}, status=400)
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def send_email_otp(request):
     email = request.data.get("email")
-    
     if not email:
-        return Response({"success": False, "message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response({"success": False, "message": "Email is required"}, status=400)
+
     try:
-        # Check if user exists
         with connection.cursor() as cursor:
             cursor.execute("SELECT user_id FROM users WHERE email=%s", [email])
-            user = cursor.fetchone()
-        
-        if not user:
-            return Response({"success": False, "message": "Email does not exist"}, status=status.HTTP_404_NOT_FOUND)
+            if cursor.fetchone():
+                return Response({"success": False, "message": "Email already exists"}, status=400)
 
-        # Generate OTP
         otp = str(random.randint(100000, 999999))
         otp_storage[email] = otp
 
-        # Send email
         send_mail(
             'Your MachMate Verification Code',
             f'Your OTP for verification is: {otp}',
@@ -400,27 +402,103 @@ def send_email_otp(request):
             fail_silently=False,
         )
 
-        return Response({"success": True, "message": "OTP sent successfully"}, status=status.HTTP_200_OK)
-
+        return Response({"success": True, "message": "OTP sent successfully"}, status=200)
     except Exception as e:
-        return Response({"success": False, "message": f"Failed to send OTP: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"success": False, "message": str(e)}, status=500)
 
- 
- 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_email_otp(request):
     email = request.data.get("email")
     otp = request.data.get("otp")
-    
     if not email or not otp:
-        return Response({"success": False, "error": "Email and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response({"success": False, "error": "Email and OTP are required"}, status=400)
+
     if email in otp_storage and otp_storage[email] == otp:
         del otp_storage[email]
-        return Response({"success": True, "message": "Email verified successfully"}, status=status.HTTP_200_OK)
-    else:
-        return Response({"success": False, "error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"success": True, "message": "Email verified successfully"}, status=200)
+    return Response({"success": False, "error": "Invalid OTP"}, status=400)
+
+
+# ------------------------------
+# ------------------------------ Forgot Password OTP FLOW ------------------------------
+# ------------------------------
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def forgot_send_phone_otp(request):
+    phone = request.data.get("phone")
+    if not phone:
+        return Response({"success": False, "message": "Phone is required"}, status=400)
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT user_id FROM users WHERE phone=%s", [phone])
+            if not cursor.fetchone():
+                return Response({"success": False, "message": "Phone number does not exist"}, status=404)
+
+        otp = str(random.randint(100000, 999999))
+        forgot_otp_storage[phone] = otp
+
+        return Response({"success": True, "message": "OTP sent successfully", "otp": otp}, status=200)
+    except Exception as e:
+        return Response({"success": False, "message": str(e)}, status=500)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def forgot_verify_phone_otp(request):
+    phone = request.data.get("phone")
+    otp = request.data.get("otp")
+    if not phone or not otp:
+        return Response({"success": False, "error": "Phone and OTP are required"}, status=400)
+
+    if phone in forgot_otp_storage and forgot_otp_storage[phone] == otp:
+        del forgot_otp_storage[phone]
+        return Response({"success": True, "message": "Phone verified successfully"}, status=200)
+    return Response({"success": False, "error": "Invalid OTP"}, status=400)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def forgot_send_email_otp(request):
+    email = request.data.get("email")
+    if not email:
+        return Response({"success": False, "message": "Email is required"}, status=400)
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT user_id FROM users WHERE email=%s", [email])
+            if not cursor.fetchone():
+                return Response({"success": False, "message": "Email does not exist"}, status=404)
+
+        otp = str(random.randint(100000, 999999))
+        forgot_otp_storage[email] = otp
+
+        send_mail(
+            'Your MachMate Verification Code',
+            f'Your OTP for password reset is: {otp}',
+            'noreply@machmate.com',
+            [email],
+            fail_silently=False,
+        )
+
+        return Response({"success": True, "message": "OTP sent successfully"}, status=200)
+    except Exception as e:
+        return Response({"success": False, "message": str(e)}, status=500)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def forgot_verify_email_otp(request):
+    email = request.data.get("email")
+    otp = request.data.get("otp")
+    if not email or not otp:
+        return Response({"success": False, "error": "Email and OTP are required"}, status=400)
+
+    if email in forgot_otp_storage and forgot_otp_storage[email] == otp:
+        del forgot_otp_storage[email]
+        return Response({"success": True, "message": "Email verified successfully"}, status=200)
+    return Response({"success": False, "error": "Invalid OTP"}, status=400)
+
 
 from django.views.decorators.csrf import csrf_exempt
 

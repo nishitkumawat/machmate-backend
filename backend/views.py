@@ -1,14 +1,14 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 import os
-import gspread
+import gspread # type: ignore
 from google.oauth2.service_account import Credentials
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from datetime import datetime
-
+from django.core.mail import send_mail
 
 @ensure_csrf_cookie
 def csrf(request):
@@ -73,6 +73,28 @@ def contact_view(request):
 
         # Append row to sheet
         sheet.append_row(row)
+        
+        email_subject = f"Thank you for contacting MachMate"
+        email_message = f"""
+Hi {name},
+
+Thank you for reaching out to us. We have received your message and will get back to you shortly.
+
+Here’s a copy of your submission:
+
+Subject: {subject}
+Message: {message}
+
+Best regards,
+MachMate
+"""
+        send_mail(
+            subject=email_subject,
+            message=email_message,
+            from_email=os.getenv("EMAIL_HOST_USER"),
+            recipient_list=[email],
+            fail_silently=False,
+        )
 
         return Response(
             {"success": True, "message": "Message saved successfully"}, 

@@ -16,5 +16,10 @@ urlpatterns = [
     path('send-phone-otp/', views.send_phone_otp, name='send_phone_otp'),
     path('verify-phone-otp/', views.verify_phone_otp, name='verify_phone_otp'),
     path("reset-password/", views.reset_password, name="reset_password"),
+    
+    path("forgot-send-phone-otp/", views.forgot_send_phone_otp),
+    path("forgot-verify-phone-otp/", views.forgot_verify_phone_otp),
+    path("forgot-send-email-otp/", views.forgot_send_email_otp),
+    path("forgot-verify-email-otp/", views.forgot_verify_email_otp),
 
 ]
