@@ -66,8 +66,6 @@ def register_view(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-# ✅ LOGIN VIEW
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
@@ -79,39 +77,30 @@ def login_view(request):
         return Response({"error": "Please provide email and password"},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT user_id, password, role FROM users WHERE email=%s", [email])
-            user = cursor.fetchone()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id, password, role FROM users WHERE email=%s", [email])
+        user = cursor.fetchone()
 
-            if not user:
-                return Response({"error": "Invalid email or password"},
-                                status=status.HTTP_401_UNAUTHORIZED)
+        if not user:
+            return Response({"error": "Invalid email or password"},
+                            status=status.HTTP_401_UNAUTHORIZED)
 
-            user_id, stored_password, role = user
+        user_id, stored_password, role = user
 
-            if not check_password(password, stored_password):
-                return Response({"error": "Invalid email or password"},
-                                status=status.HTTP_401_UNAUTHORIZED)
+        if not stored_password or not check_password(password, stored_password):
+            return Response({"error": "Invalid email or password"},
+                            status=status.HTTP_401_UNAUTHORIZED)
 
-            # ✅ Session Handling
-            request.session["user_id"] = user_id
-            request.session["role"] = role
+        # ✅ Session Handling
+        request.session["user_id"] = user_id
+        request.session["role"] = role
+        request.session.set_expiry(60 * 60 * 24 * 30 if remember_me else 0)
 
-            if remember_me:
-                request.session.set_expiry(60 * 60 * 24 * 30)  # 30 days
-            else:
-                request.session.set_expiry(0)  # expire on browser close
-
-        return Response({
-            "message": "Login successful",
-            "email": email,
-            "role": role
-        }, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    return Response({
+        "message": "Login successful",
+        "email": email,
+        "role": role
+    }, status=status.HTTP_200_OK)
 
 # ✅ LOGOUT VIEW
 @api_view(["POST"])
@@ -333,28 +322,36 @@ def change_password(request):
                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 otp_storage = {}
-# Send Phone OTP
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def send_phone_otp(request):
     phone = request.data.get("phone")
     
     if not phone:
-        return Response({"error": "Phone is required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"success": False, "message": "Phone is required"}, status=status.HTTP_400_BAD_REQUEST)
     
-    # For now, use static OTP
-    otp = "123456"
-    
-    # Store OTP temporarily
-    otp_storage[phone] = otp
-    
-    # ⚠️ In production, send via SMS provider (Twilio, MSG91, etc.)
-    return Response({
-        "success": True,
-        "message": "OTP sent successfully",
-        "otp": otp  # ❌ return only for testing, remove in production
-    }, status=status.HTTP_200_OK)
+    try:
+        # Check if user exists
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT user_id FROM users WHERE phone=%s", [phone])
+            user = cursor.fetchone()
+        
+        if not user:
+            return Response({"success": False, "message": "Phone number does not exist"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Generate OTP (static for now)
+        otp = "123456"
+        otp_storage[phone] = otp
+
+        # ⚠️ Send via SMS provider in production
+        return Response({
+            "success": True,
+            "message": "OTP sent successfully",
+            "otp": otp  # ❌ return only for testing, remove in production
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"success": False, "message": f"Failed to send OTP: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Verify Phone OTP
 @api_view(["POST"])
@@ -372,18 +369,29 @@ def verify_phone_otp(request):
         return Response({"success": True, "message": "Phone verified successfully"}, status=status.HTTP_200_OK)
     else:
         return Response({"success": False, "error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+ 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def send_email_otp(request):
     email = request.data.get("email")
     
     if not email:
-        return Response({"success": False, "error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    otp = str(random.randint(100000, 999999))
-    otp_storage[email] = otp
+        return Response({"success": False, "message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
+        # Check if user exists
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT user_id FROM users WHERE email=%s", [email])
+            user = cursor.fetchone()
+        
+        if not user:
+            return Response({"success": False, "message": "Email does not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate OTP
+        otp = str(random.randint(100000, 999999))
+        otp_storage[email] = otp
+
+        # Send email
         send_mail(
             'Your MachMate Verification Code',
             f'Your OTP for verification is: {otp}',
@@ -391,11 +399,14 @@ def send_email_otp(request):
             [email],
             fail_silently=False,
         )
+
         return Response({"success": True, "message": "OTP sent successfully"}, status=status.HTTP_200_OK)
-    except Exception:
-        return Response({"success": False, "error": "Failed to send OTP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    except Exception as e:
+        return Response({"success": False, "message": f"Failed to send OTP: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+ 
+ 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_email_otp(request):
