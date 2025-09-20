@@ -1,6 +1,6 @@
 import json
-import cloudinary
-import cloudinary.uploader
+import cloudinary # type: ignore
+import cloudinary.uploader  # type: ignore
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -117,11 +117,18 @@ def maker_open_projects(request):
         date_filter = request.GET.get('date', '')
 
         base_query = """
-            SELECT lw.work_id as id, lw.title as name, lw.description, 
-                   lw.estimated_price as price,
-                   lw.estimated_date as estimatedDate, lw.address, lw.state, lw.city, lw.pdf_report as pdfUrl,
-                   lw.created_at,
-                   (SELECT COUNT(*) FROM quotation q WHERE q.work_id = lw.work_id) as quotation_count
+            SELECT 
+                lw.work_id AS id, 
+                lw.title AS name, 
+                lw.description, 
+                lw.estimated_price AS price,
+                lw.estimated_date AS estimatedDate, 
+                lw.address, 
+                lw.state, 
+                lw.city, 
+                lw.pdf_report AS pdfUrl,
+                lw.created_at,
+                (SELECT COUNT(*) FROM quotation WHERE work_id = lw.work_id) AS quotation_count
             FROM listed_work lw
             WHERE lw.work_id NOT IN (
                 SELECT work_id FROM quotation WHERE maker_id = %s
@@ -145,6 +152,29 @@ def maker_open_projects(request):
             base_query += " ORDER BY lw.created_at DESC"
 
         projects = fetch_all(base_query, params)
+
+        # 🔑 attach quotations for each project
+        for project in projects:
+            quotation_query = """
+               SELECT 
+                    q.quotation_id,
+                    q.work_id,
+                    q.maker_id,
+                    q.description,
+                    q.pdf_quotation,
+                    q.price,
+                    q.estimated_date,
+                    q.status,
+                    q.created_at,
+                    u.name AS vendorName
+                FROM quotation q
+                LEFT JOIN users u ON q.maker_id = u.user_id
+                WHERE q.work_id = %s;
+
+            """
+            quotations = fetch_all(quotation_query, [project["id"]])
+            project["quotations"] = quotations
+
         return JsonResponse(projects, safe=False)
 
     except Exception as e:
