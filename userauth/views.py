@@ -48,7 +48,7 @@ def register_view(request):
             cursor.execute("SELECT user_id FROM users WHERE email=%s OR phone=%s",
                            [ email, phone])
             if cursor.fetchone():
-                return Response({"error": "name, email or phone already exists"},
+                return Response({"error": "email or phone already exists"},
                                 status=status.HTTP_400_BAD_REQUEST)
 
             # Hash password
