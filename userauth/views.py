@@ -2,11 +2,14 @@ import random
 import re
 from django.db import connection
 from django.contrib.auth.hashers import make_password, check_password
+import requests
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.mail import send_mail
+from django.conf import settings
+
 
 # ✅ REGISTER VIEW
 @api_view(["POST"])
@@ -359,8 +362,12 @@ def send_phone_otp(request):
 
         otp = "123456"  # Static OTP for testing
         otp_storage[phone] = otp
+        msg_response = send_sms_otp(phone, otp)
+        if msg_response.get("type") == "success":
+            return Response({"success": True, "message": "OTP sent successfully"}, status=200)
+        else:
+            return Response({"success": False, "message": "Failed to send OTP"}, status=500)
 
-        return Response({"success": True, "message": "OTP sent successfully", "otp": otp}, status=200)
     except Exception as e:
         return Response({"success": False, "message": str(e)}, status=500)
 
@@ -439,8 +446,13 @@ def forgot_send_phone_otp(request):
 
         otp = str(random.randint(100000, 999999))
         forgot_otp_storage[phone] = otp
-
-        return Response({"success": True, "message": "OTP sent successfully", "otp": otp}, status=200)
+        
+        
+        msg_response = send_sms_otp(phone, otp)
+        if msg_response.get("type") == "success":
+            return Response({"success": True, "message": "OTP sent successfully"}, status=200)
+        else:
+            return Response({"success": False, "message": "Failed to send OTP"}, status=500)
     except Exception as e:
         return Response({"success": False, "message": str(e)}, status=500)
 
@@ -544,3 +556,13 @@ def reset_password(request):
             return JsonResponse({"success": False, "message": str(e)}, status=500)
 
     return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
+
+
+def send_sms_otp(phone, otp):
+    """
+    Send OTP via MSG91
+    """
+    url = f"https://api.msg91.com/api/v5/otp?template_id={settings.MSG91_TEMPLATE_ID}&mobile={phone}&authkey={settings.MSG91_AUTH_KEY}&otp={otp}"
+    headers = {"Content-Type": "application/json"}
+    response = requests.post(url, headers=headers)
+    return response.json()
