@@ -117,7 +117,7 @@ def maker_open_projects(request):
         date_filter = request.GET.get('date', '')
 
         base_query = """
-            SELECT 
+                        SELECT 
                 lw.work_id AS id, 
                 lw.title AS name, 
                 lw.description, 
@@ -130,9 +130,11 @@ def maker_open_projects(request):
                 lw.created_at,
                 (SELECT COUNT(*) FROM quotation WHERE work_id = lw.work_id) AS quotation_count
             FROM listed_work lw
-            WHERE lw.work_id NOT IN (
+            WHERE lw.status = 'active'
+            AND lw.work_id NOT IN (
                 SELECT work_id FROM quotation WHERE maker_id = %s
-            )
+            );
+
         """
         params = [user_id]
 

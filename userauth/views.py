@@ -557,15 +557,14 @@ def reset_password(request):
 
     return JsonResponse({"success": False, "message": "Invalid request method"}, status=405)
 
-
 def send_sms_otp(phone, otp):
     """
     Send OTP via MSG91 V5 API
     """
     url = "https://api.msg91.com/api/v5/otp"
     payload = {
-        "template_id": settings.MSG91_TEMPLATE_ID,
-        "mobile": phone,        # Must include country code, e.g., "91XXXXXXXXXX"
+        "template_id": settings.MSG91_TEMPLATE_ID,  # Must be valid
+        "mobile": "91"+phone,                             # Include country code like "919104513411"
         "otp": otp
     }
     headers = {
@@ -574,8 +573,4 @@ def send_sms_otp(phone, otp):
     }
 
     response = requests.post(url, json=payload, headers=headers)
-    
-    try:
-        return response.json()
-    except Exception:
-        return {"error": "Invalid response", "status_code": response.status_code}
+    return response.json()
