@@ -360,7 +360,7 @@ def send_phone_otp(request):
             if cursor.fetchone():
                 return Response({"success": False, "message": "Phone number already exists"}, status=400)
 
-        otp = "123456"  # Static OTP for testing
+        otp = str(random.randint(100000, 999999))
         otp_storage[phone] = otp
         msg_response = send_sms_otp(phone, otp)
         if msg_response.get("type") == "success":
@@ -560,9 +560,22 @@ def reset_password(request):
 
 def send_sms_otp(phone, otp):
     """
-    Send OTP via MSG91
+    Send OTP via MSG91 V5 API
     """
-    url = f"https://api.msg91.com/api/v5/otp?template_id={settings.MSG91_TEMPLATE_ID}&mobile={phone}&authkey={settings.MSG91_AUTH_KEY}&otp={otp}"
-    headers = {"Content-Type": "application/json"}
-    response = requests.post(url, headers=headers)
-    return response.json()
+    url = "https://api.msg91.com/api/v5/otp"
+    payload = {
+        "template_id": settings.MSG91_TEMPLATE_ID,
+        "mobile": phone,        # Must include country code, e.g., "91XXXXXXXXXX"
+        "otp": otp
+    }
+    headers = {
+        "authkey": settings.MSG91_AUTH_KEY,
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    
+    try:
+        return response.json()
+    except Exception:
+        return {"error": "Invalid response", "status_code": response.status_code}
