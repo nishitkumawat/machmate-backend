@@ -1,5 +1,5 @@
 import json
-import razorpay
+import razorpay # type: ignore
 import datetime
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
