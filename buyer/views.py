@@ -325,7 +325,7 @@ def upload_pdf(request):
     )
     return Response({"url": result["secure_url"]})
 
-
+@csrf_exempt
 @require_http_methods(["DELETE"])
 def delete_project(request, project_id):
     try:
