@@ -62,6 +62,20 @@ def register_view(request):
                 "INSERT INTO users (name, email, phone, password, role) VALUES (%s, %s, %s, %s, %s)",
                 [name, email, phone, hashed_pw, role]
             )
+            
+            subject = "Welcome to MachMate - Verify Your Account"
+            message = f"""
+            Hi {name},
+
+            Welcome to MachMate 🎉
+
+            We're excited to have you onboard. Start exploring machining services, 
+            post your requirements, and connect with trusted partners.
+
+            Regards,
+            Team MachMate
+            """
+            send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)
 
         return Response({"message": "User registered successfully", "role": role},
                         status=status.HTTP_201_CREATED)
@@ -316,6 +330,27 @@ def change_password(request):
                 "UPDATE users SET password=%s WHERE user_id=%s",
                 [hashed_password, user_id]
             )
+            cursor.execute(
+                "SELECT name, email FROM users WHERE user_id=%s",
+                [user_id]
+            )
+            result = cursor.fetchone()
+
+            if result:
+                name, email = result[0], result[1]
+            subject = "Your MachMate Password Has Been Reset"
+            message = f"""
+                Hi {name},
+
+                Your MachMate account password has been successfully reset.
+
+                If this was you, no further action is needed ✅
+                If you did not request this change, please contact our support team immediately.
+
+                Stay secure,
+                Team MachMate
+                """
+            send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)
             
         return Response({"message": "Password changed successfully"}, 
                        status=status.HTTP_200_OK)
@@ -404,7 +439,7 @@ def send_email_otp(request):
         send_mail(
             'Your MachMate Verification Code',
             f'Your OTP for verification is: {otp}',
-            'noreply@machmate.com',
+            'noreply@machmate.in',
             [email],
             fail_silently=False,
         )
@@ -489,7 +524,7 @@ def forgot_send_email_otp(request):
         send_mail(
             'Your MachMate Verification Code',
             f'Your OTP for password reset is: {otp}',
-            'noreply@machmate.com',
+            'noreply@machmate.in',
             [email],
             fail_silently=False,
         )
@@ -550,6 +585,20 @@ def reset_password(request):
                 else:
                     cursor.execute("UPDATE users SET password = %s WHERE phone = %s", [hashed_password, phone])
 
+            subject = "Your MachMate Password Has Been Reset"
+            message = f"""
+                Hello User,
+
+                Your MachMate account password has been successfully reset.
+
+                If this was you, no further action is needed ✅
+                If you did not request this change, please contact our support team immediately.
+
+                Stay secure,
+                Team MachMate
+                """
+            send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)    
+        
             return JsonResponse({"success": True, "message": "Password reset successful"})
 
         except Exception as e:

@@ -4,6 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
 import json
 from django.views.decorators.http import require_http_methods
+from django.core.mail import send_mail
 
 
 # Helper to execute SELECT queries
@@ -302,7 +303,59 @@ def accept_quotation(request, quotation_id):
             "UPDATE quotation SET status = 'rejected' WHERE work_id = %s AND quotation_id != %s",
             [work_id, quotation_id]
         )
+        with connection.cursor() as cursor:
+                cursor.execute(
+                        "SELECT name, email,phone FROM users WHERE user_id=%s",
+                        [user_id]
+                    )
+                result = cursor.fetchone()
 
+                if result:
+                    name, email,phone = result[0], result[1],result[2]
+                    
+                cursor.execute(
+                        "SELECT plan FROM users WHERE user_id=%s",
+                        [maker_id]
+                    )
+                result = cursor.fetchone()
+
+                if result:
+                    user_type = result[0]
+            
+        subject = "A Customer Accepted Your Quotation"
+        if user_type == "basic" or user_type == "pro":  # free or no plan
+            message = f"""
+            Hi,
+
+            A customer has accepted your quotation on MachMate.
+            Since your plan does not provide you the Direct contact to the Buyer,
+            Please wait for Buyer to connect you.
+
+            
+
+            Regards,
+            Team MachMate
+            """
+        else:  # premium
+            message = f"""
+            Hi,
+
+            A customer has accepted your quotation on MachMate.
+            Since you are a Premium user, you can contact them directly.
+
+            Customer Details:
+            Name: {name}
+            Email: {email}
+            Phone: {phone}
+
+            Reach out now and close the deal ✅
+
+            Regards,
+            Team MachMate
+            """
+
+        send_mail(subject, message, "noreply@machmate.com", [email], fail_silently=False)
+        
         return JsonResponse({"message": "Quotation accepted, project marked as completed"}, status=200)
 
     except Exception as e:

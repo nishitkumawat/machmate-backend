@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
 from django.conf import settings
 from django.views.decorators.http import require_http_methods
+from django.core.mail import send_mail
 
 # Setup Razorpay client
 razorpay_client = razorpay.Client(
@@ -177,6 +178,31 @@ def verify_payment(request):
                     subscription_end_date = %s
                 WHERE user_id = %s
             """, [plan, credits[plan], start_date, end_date, user_id])
+            
+            cursor.execute(
+            "SELECT email FROM users WHERE user_id=%s",
+             [user_id]
+            )
+            result = cursor.fetchone()
+
+            if result:
+                 email = result[0]
+
+            
+            subject = "Your MachMate Subscription is Active"
+            message = f"""
+            Hi,
+
+            Thank you for purchasing the {plan} subscription with MachMate.
+            Your subscription is valid for A Month.
+
+            Enjoy all the premium features 🚀
+
+            Regards,
+            Team MachMate
+            """
+            send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)
+
 
         return JsonResponse({'success': True, 'message': 'Subscription activated!'})
         
@@ -218,7 +244,8 @@ def check_credits(request):
         cursor.execute("SELECT remaining_credits FROM users WHERE user_id = %s", [user_id])
         row = cursor.fetchone()
         has_credits = row[0] > 0 if row else False
-
+    
+    
     return JsonResponse({'has_credits': has_credits})
 @csrf_exempt
 @require_http_methods(["POST"])
