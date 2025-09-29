@@ -8,7 +8,10 @@ urlpatterns = [
     path('projects/<int:project_id>/quotation/', views.create_quotation, name='create_quotation'),
     path('quotations/', views.maker_quotations, name='maker_quotations'),
     
-    
+    path('products/<int:product_id>/', views.product_details, name='product-details'),
+      path('quotations/<int:quotation_id>/', views.delete_quotation, name='delete-quotation'),
+  
+  
     # path('company-details/', views.get_company_profile, name='get-company-details'),
     path('company-details/create/', views.manage_company_profile, name='create-company-details'),
     path('company-details/update/', views.manage_company_profile, name='update-company-details'),

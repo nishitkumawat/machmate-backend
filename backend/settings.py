@@ -150,8 +150,6 @@ SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_NAME = "machmate_sessionid"
 CSRF_COOKIE_NAME = "machmate_csrftoken"
-SESSION_COOKIE_DOMAIN = ".machmate.in"  # allows frontend to send cookies to backend
-CSRF_COOKIE_DOMAIN = ".machmate.in"
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST')

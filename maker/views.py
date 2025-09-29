@@ -511,3 +511,155 @@ def get_maker_profile_by_id(request, maker_id):
     except Exception as e:
         return Response({"error": str(e)}, 
                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ----------------------------
+# Product Details - Direct implementation
+# ----------------------------
+@csrf_exempt
+@require_http_methods(["GET"])
+def product_details(request, product_id):
+    try:
+        user_id = request.session.get("user_id")
+        
+        with connection.cursor() as cursor:
+            # Get product details
+            product_query = """
+                SELECT 
+                    lw.work_id AS id,
+                    lw.title AS name,
+                    lw.description,
+                    lw.estimated_price AS price,
+                    lw.estimated_date AS estimated_date,
+                    COALESCE(lw.image_url, 'https://images.unsplash.com/photo-1581094794321-8411c1c0e0ce?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%%3D%%3D&auto=format&fit=crop&w=1000&q=80') AS image,
+                    lw.pdf_report,
+                    lw.city,
+                    lw.state,
+                    lw.created_at,
+                    u.name AS uploaded_by_name,
+                    u.user_id AS uploaded_by_id,
+                    u.phone,
+                    u.email,
+                    COALESCE(u.plan, 'none') AS subscription_plan
+                FROM listed_work lw
+                JOIN users u ON lw.user_id = u.user_id
+                WHERE lw.work_id = %s AND lw.status = 'active'
+            """
+            cursor.execute(product_query, [product_id])
+            product_rows = cursor.fetchall()
+            
+            if not product_rows:
+                return JsonResponse({"error": "Product not found"}, status=404)
+            
+            # Convert to dict
+            columns = [col[0] for col in cursor.description]
+            product_data = dict(zip(columns, product_rows[0]))
+            
+            # Check if user is premium
+            is_premium_user = product_data.get("subscription_plan") == "premium"
+            
+            # Get quotations for this product
+            quotations_query = """
+                SELECT 
+                    q.quotation_id AS id,
+                    q.price AS amount,
+                    q.description,
+                    q.estimated_date AS completion_date,
+                    q.pdf_quotation,
+                    q.status,
+                    q.created_at,
+                    u.name AS vendor_name,
+                    COALESCE(mcd.company_name, u.name) AS vendor_company
+                FROM quotation q
+                JOIN users u ON q.maker_id = u.user_id
+                LEFT JOIN maker_company_details mcd ON q.maker_id = mcd.maker_id
+                WHERE q.work_id = %s
+                ORDER BY q.price ASC
+            """
+            cursor.execute(quotations_query, [product_id])
+            quotation_rows = cursor.fetchall()
+            quotation_columns = [col[0] for col in cursor.description]
+            quotations = [dict(zip(quotation_columns, row)) for row in quotation_rows]
+            
+            # Get user's quotation if logged in
+            user_quotation = None
+            if user_id:
+                user_quotation_query = """
+                    SELECT 
+                        quotation_id AS id,
+                        price AS amount,
+                        description,
+                        estimated_date AS completion_date,
+                        pdf_quotation,
+                        status,
+                        created_at
+                    FROM quotation 
+                    WHERE work_id = %s AND maker_id = %s
+                """
+                cursor.execute(user_quotation_query, [product_id, user_id])
+                user_quotation_rows = cursor.fetchall()
+                if user_quotation_rows:
+                    user_quotation_columns = [col[0] for col in cursor.description]
+                    user_quotation = dict(zip(user_quotation_columns, user_quotation_rows[0]))
+        
+        # Convert date objects to strings for JSON serialization
+        estimated_date = product_data["estimated_date"]
+        if hasattr(estimated_date, 'isoformat'):
+            estimated_date = estimated_date.isoformat()
+        
+        response_data = {
+            "id": product_data["id"],
+            "name": product_data["name"],
+            "description": product_data["description"],
+            "price": float(product_data["price"]) if product_data["price"] else 0,
+            "estimated_date": estimated_date,
+            "image": product_data["image"],
+            "pdf_report": product_data["pdf_report"],
+            "city": product_data["city"],
+            "state": product_data["state"],
+            "uploaded_by_name": product_data["uploaded_by_name"],
+            "is_premium_user": is_premium_user,
+            "quotations": quotations,
+            "user_quotation": user_quotation
+        }
+        
+        # Add contact info for premium users
+        if is_premium_user and product_data["phone"] and product_data["email"]:
+            response_data["phone_number"] = product_data["phone"]
+            response_data["email"] = product_data["email"]
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in product_details: {str(e)}")
+        print(f"Traceback: {error_details}")
+        return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_quotation(request, quotation_id):
+    try:
+        user_id = request.session.get("user_id")
+        if not user_id:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+
+        # Check if quotation exists and belongs to user
+        quotation_query = """
+            SELECT quotation_id FROM quotation 
+            WHERE quotation_id = %s AND maker_id = %s
+        """
+        quotation_result = fetch_all(quotation_query, [quotation_id, user_id])
+        
+        if not quotation_result:
+            return JsonResponse({"error": "Quotation not found or access denied"}, status=404)
+
+        # Delete quotation
+        delete_query = "DELETE FROM quotation WHERE quotation_id = %s AND maker_id = %s"
+        execute_query(delete_query, [quotation_id, user_id])
+
+        return JsonResponse({"message": "Quotation deleted successfully"})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
