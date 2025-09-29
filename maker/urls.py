@@ -9,7 +9,7 @@ urlpatterns = [
     path('quotations/', views.maker_quotations, name='maker_quotations'),
     
     path('products/<int:product_id>/', views.product_details, name='product-details'),
-      path('quotations/<int:quotation_id>/', views.delete_quotation, name='delete-quotation'),
+    path('quotations/<int:quotation_id>/', views.delete_quotation, name='delete-quotation'),
   
   
     # path('company-details/', views.get_company_profile, name='get-company-details'),
