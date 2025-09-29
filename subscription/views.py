@@ -188,6 +188,8 @@ def verify_payment(request):
             if result:
                  email = result[0]
 
+            # -------------------- Apply pending referral reward --------------------
+            apply_pending_referral_reward(user_id)
             
             subject = "Your MachMate Subscription is Active"
             message = f"""
@@ -309,3 +311,60 @@ def use_credit(request):
                 
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+
+# ------------------------------
+# Apply pending referral reward
+# ------------------------------
+def apply_pending_referral_reward(user_id):
+    with connection.cursor() as cursor:
+        # Check if user has pending referral reward
+        cursor.execute("""
+            SELECT referrer_id FROM referral_rewards 
+            WHERE user_id = %s AND applied = 0
+        """, [user_id])
+        row = cursor.fetchone()
+        if row:
+            referrer_id = row[0]
+
+            # Reward for the new user: +15 days and +10 credits
+            cursor.execute("""
+                SELECT subscription_end_date, remaining_credits FROM users WHERE user_id=%s
+            """, [user_id])
+            plan_data = cursor.fetchone()
+            if plan_data:
+                end_date, remaining_credits = plan_data
+                if end_date:
+                    new_end_date = datetime.datetime.strptime(str(end_date), "%Y-%m-%d") + datetime.timedelta(days=15)
+                else:
+                    new_end_date = datetime.date.today() + datetime.timedelta(days=15)
+
+                cursor.execute("""
+                    UPDATE users SET 
+                        subscription_end_date=%s,
+                        remaining_credits=%s
+                    WHERE user_id=%s
+                """, [new_end_date, remaining_credits + 10, user_id])
+
+            # Reward for the referrer: +15 days and +10 credits
+            cursor.execute("""
+                SELECT subscription_end_date, remaining_credits FROM users WHERE user_id=%s
+            """, [referrer_id])
+            ref_data = cursor.fetchone()
+            if ref_data:
+                ref_end_date, ref_credits = ref_data
+                if ref_end_date:
+                    new_ref_end_date = datetime.datetime.strptime(str(ref_end_date), "%Y-%m-%d") + datetime.timedelta(days=15)
+                else:
+                    new_ref_end_date = datetime.date.today() + datetime.timedelta(days=15)
+
+                cursor.execute("""
+                    UPDATE users SET 
+                        subscription_end_date=%s,
+                        remaining_credits=%s
+                    WHERE user_id=%s
+                """, [new_ref_end_date, ref_credits + 10, referrer_id])
+
+            # Mark referral reward as applied
+            cursor.execute("""
+                UPDATE referral_rewards SET applied=1 WHERE user_id=%s AND referrer_id=%s
+            """, [user_id, referrer_id])

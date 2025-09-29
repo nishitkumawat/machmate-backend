@@ -9,9 +9,25 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.core.mail import send_mail
 from django.conf import settings
+import uuid
+from datetime import datetime, timedelta
 
+# ------------------------------
+# Generate unique referral code
+# ------------------------------
+def generate_referral_code():
+    code = str(uuid.uuid4())[:8].upper()
+    with connection.cursor() as cursor:
+        while True:
+            cursor.execute("SELECT user_id FROM users WHERE referral_code=%s", [code])
+            if not cursor.fetchone():
+                break
+            code = str(uuid.uuid4())[:8].upper()
+    return code
 
-# ✅ REGISTER VIEW
+# ------------------------------
+# Register View with Referral
+# ------------------------------
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
@@ -19,51 +35,75 @@ def register_view(request):
     email = request.data.get("email")
     password = request.data.get("password")
     phone = request.data.get("phone")
-    role = request.data.get("accountType", "buyer")  # default is user
+    role = request.data.get("accountType", "buyer")
+    referral_code_input = request.data.get("referralCode")  # optional
 
     if not name or not email or not password or not phone:
         return Response({"error": "name, email, phone, and password are required"},
-                        status=status.HTTP_400_BAD_REQUEST)
+                        status=400)
 
-    # ✅ Password validation
+    # ------------------ Password validation ------------------
     if len(password) < 8:
-        return Response({"error": "Password must be at least 8 characters"},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Password must be at least 8 characters"}, status=400)
     if not re.search(r"[A-Z]", password):
-        return Response({"error": "Password must contain at least one uppercase"},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Password must contain at least one uppercase"}, status=400)
     if not re.search(r"[@$!%*?&]", password):
-        return Response({"error": "Password must contain at least one special character (@$!%*?&)"},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Password must contain at least one special character (@$!%*?&)"}, status=400)
 
-    # ✅ Phone validation
+    # ------------------ Phone validation ------------------
     if not re.fullmatch(r"\d{10}", phone):
-        return Response({"error": "Phone must be 10 digits"},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Phone must be 10 digits"}, status=400)
 
     if role not in ["buyer", "maker"]:
-        return Response({"error": "Invalid role"},
-                        status=status.HTTP_400_BAD_REQUEST)
-
+        return Response({"error": "Invalid role"}, status=400)
     try:
         with connection.cursor() as cursor:
-            # Check if user already exists
-            cursor.execute("SELECT user_id FROM users WHERE email=%s OR phone=%s",
-                           [ email, phone])
+            # Check if user exists
+            cursor.execute("SELECT user_id FROM users WHERE email=%s OR phone=%s", [email, phone])
             if cursor.fetchone():
-                return Response({"error": "email or phone already exists"},
-                                status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "email or phone already exists"}, status=400)
 
             # Hash password
             hashed_pw = make_password(password)
-
-            # Insert user
+            referral_code = generate_referral_code()
+            referred_by = None
+           # Check referral code input
+            if referral_code_input:
+                cursor.execute("SELECT user_id FROM users WHERE referral_code=%s", [referral_code_input])
+                ref = cursor.fetchone()
+                if ref:
+                    referred_by = ref[0]
+                
+            # Insert new user
             cursor.execute(
-                "INSERT INTO users (name, email, phone, password, role) VALUES (%s, %s, %s, %s, %s)",
-                [name, email, phone, hashed_pw, role]
+                "INSERT INTO users (name, email, phone, password, role, referral_code, referred_by) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                [name, email, phone, hashed_pw, role, referral_code, referred_by]
             )
-            
-            subject = "Welcome to MachMate - Verify Your Account"
+            new_user_id = cursor.lastrowid
+           
+            # ------------------ Reward logic ------------------
+            if referred_by:
+                cursor.execute("SELECT subscription_end_date, remaining_credits FROM users WHERE user_id=%s", [referred_by])
+                plan = cursor.fetchone()
+                
+                if plan:
+                    end_date, remaining_credits = plan
+                    if end_date:
+                        new_end_date = datetime.strptime(str(end_date), "%Y-%m-%d") + timedelta(days=15)
+                        cursor.execute(
+                            "UPDATE users SET subscription_end_date=%s, remaining_credits=%s WHERE user_id=%s",
+                            [new_end_date.date(), remaining_credits + 10, referred_by]
+                        )
+                        
+                # Reward for new user is pending
+                cursor.execute(
+                    "INSERT INTO referral_rewards (user_id, referrer_id) VALUES (%s,%s)",
+                    [new_user_id, referred_by]
+                )
+                
+            # Send welcome email
+            subject = "Welcome to MachMate"
             message = f"""
             Hi {name},
 
@@ -76,12 +116,13 @@ def register_view(request):
             Team MachMate
             """
             send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)
-
-        return Response({"message": "User registered successfully", "role": role},
-                        status=status.HTTP_201_CREATED)
+            
+        return Response({"message": "User registered successfully", "role": role, "referral_code": referral_code}, status=201)
 
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": str(e)}, status=500)
+
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -164,7 +205,7 @@ def get_user_profile(request):
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT user_id, name, email, phone, role FROM users WHERE user_id=%s", 
+                "SELECT user_id, name, email, phone, role, referral_code FROM users WHERE user_id=%s", 
                 [user_id]
             )
             user = cursor.fetchone()
@@ -179,7 +220,8 @@ def get_user_profile(request):
                 "name": user[1],
                 "email": user[2],
                 "phone": user[3],
-                "role": user[4]
+                "role": user[4],
+                "referral_code": user[5],
             }
             
         return Response(user_data, status=status.HTTP_200_OK)
@@ -443,7 +485,7 @@ def send_email_otp(request):
             [email],
             fail_silently=False,
         )
-
+        print(otp)
         return Response({"success": True, "message": "OTP sent successfully"}, status=200)
     except Exception as e:
         return Response({"success": False, "message": str(e)}, status=500)
