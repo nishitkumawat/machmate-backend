@@ -226,7 +226,9 @@ def get_project_quotations(request, project_id):
             if q["created_at"]:
                 q["created_at"] = q["created_at"].isoformat()
             if q["pdf_quotation"]:
-                q["pdf_quotation"] = request.build_absolute_uri(f"/media/{q['pdf_quotation']}")
+                if not q["pdf_quotation"].startswith("http"):
+                    # Only prepend domain for relative paths
+                    q["pdf_quotation"] = request.build_absolute_uri(f"/media/{q['pdf_quotation']}")
 
         return JsonResponse(quotations, safe=False)
 
