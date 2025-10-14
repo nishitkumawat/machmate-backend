@@ -21,8 +21,8 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "machmate.in",
     "www.machmate.in",
-    "machmate-backend.onrender.com",
-    "machmate.netlify.app",
+    "app.machmate.in",      # Frontend subdomain
+    "api.machmate.in",      # Backend subdomain
 ]
 
 # Application definition
@@ -61,12 +61,12 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "backend.urls"
 
-# CORS settings
+# ----------------------------
+# CORS & CSRF Settings
+# ----------------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",          # React dev server
-    "https://machmate.netlify.app",   # Netlify frontend
-    "https://machmate.in",
-    "https://www.machmate.in",
+    "http://localhost:5173",     # React dev server
+    "https://app.machmate.in",   # Frontend subdomain
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
@@ -84,19 +84,24 @@ CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
-    "https://machmate.netlify.app",
-    "https://machmate.in",
-    "https://www.machmate.in",
+    "https://app.machmate.in",
 ]
 
-# Session & CSRF cookies (cross-domain)
+# ----------------------------
+# Session & CSRF cookies
+# ----------------------------
+SESSION_COOKIE_DOMAIN = ".machmate.in"  # allows sharing across subdomains
+CSRF_COOKIE_DOMAIN = ".machmate.in"
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SAMESITE = "Lax"  # Lax works for subdomain navigation
+CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_NAME = "machmate_sessionid"
 CSRF_COOKIE_NAME = "machmate_csrftoken"
 
+# ----------------------------
+# Templates
+# ----------------------------
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -114,7 +119,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "backend.wsgi.application"
 
+# ----------------------------
 # Database (MySQL with SSL)
+# ----------------------------
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
@@ -129,7 +136,9 @@ DATABASES = {
     }
 }
 
+# ----------------------------
 # Password validation
+# ----------------------------
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -137,20 +146,28 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# ----------------------------
 # Internationalization
+# ----------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
+# ----------------------------
 # Static files
+# ----------------------------
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
+# ----------------------------
 # Default primary key field type
+# ----------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ----------------------------
 # Cloudinary storage
+# ----------------------------
 CLOUDINARY_STORAGE = {
     "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
     "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
@@ -158,11 +175,15 @@ CLOUDINARY_STORAGE = {
 }
 DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 
+# ----------------------------
 # Razorpay
+# ----------------------------
 RAZORPAY_KEY_ID = os.getenv("RZ_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RZ_SECRET")
 
+# ----------------------------
 # Email
+# ----------------------------
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("EMAIL_HOST")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
@@ -171,7 +192,9 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 
+# ----------------------------
 # MSG91
+# ----------------------------
 MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
 MSG91_SENDER_ID = os.getenv("MSG91_SENDER_ID")
 MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID")
