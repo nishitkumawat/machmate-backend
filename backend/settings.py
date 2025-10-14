@@ -13,9 +13,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY"
-)
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = [
@@ -24,7 +22,7 @@ ALLOWED_HOSTS = [
     "machmate.in",
     "www.machmate.in",
     "machmate-backend.onrender.com",
-    "machmate.netlify.app"  # Add Netlify frontend
+    "machmate.netlify.app",
 ]
 
 # Application definition
@@ -64,19 +62,40 @@ MIDDLEWARE = [
 ROOT_URLCONF = "backend.urls"
 
 # CORS settings
-CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",           # React dev server
-    "https://machmate.netlify.app",    # Netlify frontend
+    "http://localhost:5173",          # React dev server
+    "https://machmate.netlify.app",   # Netlify frontend
     "https://machmate.in",
     "https://www.machmate.in",
 ]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://machmate.netlify.app",
     "https://machmate.in",
     "https://www.machmate.in",
 ]
+
+# Session & CSRF cookies (cross-domain)
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_NAME = "machmate_sessionid"
+CSRF_COOKIE_NAME = "machmate_csrftoken"
 
 TEMPLATES = [
     {
@@ -143,23 +162,16 @@ DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 RAZORPAY_KEY_ID = os.getenv("RZ_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RZ_SECRET")
 
-# Session & CSRF cookies (cross-domain)
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SAMESITE = "None"
-SESSION_COOKIE_NAME = "machmate_sessionid"
-CSRF_COOKIE_NAME = "machmate_csrftoken"
+# Email
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))  # default to 587 if not set
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
-
-
+# MSG91
 MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
 MSG91_SENDER_ID = os.getenv("MSG91_SENDER_ID")
 MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID")
