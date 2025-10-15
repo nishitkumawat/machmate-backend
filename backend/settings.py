@@ -5,6 +5,7 @@ Django settings for backend project.
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +24,6 @@ ALLOWED_HOSTS = [
     "www.machmate.in",
     "app.machmate.in",      # Frontend subdomain
     "api.machmate.in",      # Backend subdomain
-    "machmate-backend.onrender.com",
 ]
 
 # Application definition
@@ -66,10 +66,8 @@ ROOT_URLCONF = "backend.urls"
 # CORS & CSRF Settings
 # ----------------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",     # React dev server
-    "https://app.machmate.in",   # Frontend subdomain
-    "https://machmate-backend.onrender.com",
-    "https://machmate.in",
+    "http://localhost:5173",     
+    "https://app.machmate.in",
     "https://api.machmate.in",
 ]
 CORS_ALLOW_CREDENTIALS = True
@@ -90,18 +88,17 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://app.machmate.in",
     "https://api.machmate.in",
-    "https://machmate-backend.onrender.com",
-    "https:/machmate.in",
+    "https://machmate.in",
 ]
 
 # ----------------------------
 # Session & CSRF cookies
 # ----------------------------
-SESSION_COOKIE_DOMAIN = ".machmate.in"  # allows sharing across subdomains
+SESSION_COOKIE_DOMAIN = ".machmate.in"
 CSRF_COOKIE_DOMAIN = ".machmate.in"
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "Lax"  # Lax works for subdomain navigation
+SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_NAME = "machmate_sessionid"
 CSRF_COOKIE_NAME = "machmate_csrftoken"
@@ -127,7 +124,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "backend.wsgi.application"
 
 # ----------------------------
-# Database (MySQL with SSL)
+# Database
 # ----------------------------
 DATABASES = {
     "default": {
@@ -167,10 +164,8 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
-# ----------------------------
-# Default primary key field type
-# ----------------------------
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
 
 # ----------------------------
 # Cloudinary storage
@@ -205,3 +200,42 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
 MSG91_SENDER_ID = os.getenv("MSG91_SENDER_ID")
 MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID")
+
+# # ----------------------------
+# # REST Framework
+# # ----------------------------
+# REST_FRAMEWORK = {
+#     "DEFAULT_AUTHENTICATION_CLASSES": (
+#         "rest_framework_simplejwt.authentication.JWTAuthentication",
+#     ),
+#     "DEFAULT_PERMISSION_CLASSES": [
+#         "rest_framework.permissions.AllowAny",
+#     ],
+# }
+
+# # ----------------------------
+# # JWT Configuration
+# # ----------------------------
+# SIMPLE_JWT = {
+#     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+#     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+#     "AUTH_HEADER_TYPES": ("Bearer",),
+# }
+
+# # ----------------------------
+# # Security Headers
+# # ----------------------------
+# SECURE_BROWSER_XSS_FILTER = True
+# SECURE_CONTENT_TYPE_NOSNIFF = True
+# X_FRAME_OPTIONS = "DENY"
+
+# # ----------------------------
+# # Logging
+# # ----------------------------
+# LOGGING = {
+#     "version": 1,
+#     "handlers": {
+#         "console": {"class": "logging.StreamHandler"},
+#     },
+#     "root": {"handlers": ["console"], "level": "INFO"},
+# }
