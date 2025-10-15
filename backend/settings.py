@@ -22,8 +22,8 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "machmate.in",
     "www.machmate.in",
-    "app.machmate.in",      # Frontend subdomain
-    "api.machmate.in",      # Backend subdomain
+    "app.machmate.in",
+    "api.machmate.in",
 ]
 
 # Application definition
@@ -66,7 +66,7 @@ ROOT_URLCONF = "backend.urls"
 # CORS & CSRF Settings
 # ----------------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",     
+    "http://localhost:5173",
     "https://app.machmate.in",
     "https://api.machmate.in",
 ]
@@ -98,8 +98,8 @@ SESSION_COOKIE_DOMAIN = ".machmate.in"
 CSRF_COOKIE_DOMAIN = ".machmate.in"
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "Lax"
-CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_NAME = "machmate_sessionid"
 CSRF_COOKIE_NAME = "machmate_csrftoken"
 
@@ -201,41 +201,41 @@ MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
 MSG91_SENDER_ID = os.getenv("MSG91_SENDER_ID")
 MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID")
 
-# # ----------------------------
-# # REST Framework
-# # ----------------------------
-# REST_FRAMEWORK = {
-#     "DEFAULT_AUTHENTICATION_CLASSES": (
-#         "rest_framework_simplejwt.authentication.JWTAuthentication",
-#     ),
-#     "DEFAULT_PERMISSION_CLASSES": [
-#         "rest_framework.permissions.AllowAny",
-#     ],
-# }
+# ----------------------------
+# REST Framework
+# ----------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",
+    ],
+}
 
-# # ----------------------------
-# # JWT Configuration
-# # ----------------------------
-# SIMPLE_JWT = {
-#     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-#     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-#     "AUTH_HEADER_TYPES": ("Bearer",),
-# }
+# ----------------------------
+# JWT Configuration
+# ----------------------------
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
 
-# # ----------------------------
-# # Security Headers
-# # ----------------------------
-# SECURE_BROWSER_XSS_FILTER = True
-# SECURE_CONTENT_TYPE_NOSNIFF = True
-# X_FRAME_OPTIONS = "DENY"
+# ----------------------------
+# Security Headers
+# ----------------------------
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
 
-# # ----------------------------
-# # Logging
-# # ----------------------------
-# LOGGING = {
-#     "version": 1,
-#     "handlers": {
-#         "console": {"class": "logging.StreamHandler"},
-#     },
-#     "root": {"handlers": ["console"], "level": "INFO"},
-# }
+# ----------------------------
+# Logging
+# ----------------------------
+LOGGING = {
+    "version": 1,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+}
