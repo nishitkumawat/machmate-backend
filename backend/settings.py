@@ -23,6 +23,7 @@ ALLOWED_HOSTS = [
     "www.machmate.in",
     "app.machmate.in",      # Frontend subdomain
     "api.machmate.in",      # Backend subdomain
+    "machmate-backend.onrender.com",
 ]
 
 # Application definition
@@ -67,6 +68,9 @@ ROOT_URLCONF = "backend.urls"
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",     # React dev server
     "https://app.machmate.in",   # Frontend subdomain
+    "https://machmate-backend.onrender.com",
+    "https://machmate.in",
+    "https://api.machmate.in",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
@@ -85,6 +89,9 @@ CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://app.machmate.in",
+    "https://api.machmate.in",
+    "https://machmate-backend.onrender.com",
+    "https:/machmate.in",
 ]
 
 # ----------------------------
