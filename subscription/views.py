@@ -13,6 +13,43 @@ razorpay_client = razorpay.Client(
     auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
 )
 
+# Updated prices with multiple periods
+PRICES = {
+    'basic': {
+        '1_month': 49900,     # ₹499
+        '3_months': 142000,   # ₹1,420
+        '6_months': 264000,   # ₹2,640
+        '12_months': 479000,  # ₹4,790
+    },
+    'pro': {
+        '1_month': 149900,    # ₹1,499
+        '3_months': 427000,   # ₹4,270
+        '6_months': 790000,   # ₹7,900
+        '12_months': 1439000, # ₹14,390
+    },
+    'premium': {
+        '1_month': 349900,    # ₹3,499
+        '3_months': 995000,   # ₹9,950
+        '6_months': 1848000,  # ₹18,480
+        '12_months': 3359000, # ₹33,590
+    }
+}
+
+# Credits allocation per plan
+CREDITS = {
+    'basic': 10,
+    'pro': 100,
+    'premium': 9999
+}
+
+# Period in days
+PERIOD_DAYS = {
+    '1_month': 30,
+    '3_months': 90,
+    '6_months': 180,
+    '12_months': 365
+}
+
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -54,14 +91,14 @@ def create_payment(request):
     try:
         data = json.loads(request.body)
         plan = data.get('plan')
+        period = data.get('period')
         
-        if not plan:
-            return JsonResponse({'error': 'Plan parameter is required'}, status=400)
+        if not plan or not period:
+            return JsonResponse({'error': 'Plan and period parameters are required'}, status=400)
 
-        # Plan prices (in paise)
-        prices = {'basic': 49900, 'pro': 149900, 'premium': 349900}
-        if plan not in prices:
-            return JsonResponse({'error': 'Invalid plan'}, status=400)
+        # Validate plan and period
+        if plan not in PRICES or period not in PRICES[plan]:
+            return JsonResponse({'error': 'Invalid plan or period'}, status=400)
 
         # Check if user already has this plan active
         with connection.cursor() as cursor:
@@ -76,24 +113,25 @@ def create_payment(request):
         # Create Razorpay order
         try:
             order = razorpay_client.order.create({
-                'amount': prices[plan],
+                'amount': PRICES[plan][period],
                 'currency': 'INR',
                 'payment_capture': 1,
                 'notes': {
                     'plan': plan,
+                    'period': period,
                     'user_id': user_id
                 }
             })
         except Exception as e:
             return JsonResponse({'error': f'Razorpay order creation failed: {str(e)}'}, status=500)
 
-        # Save transaction in DB
+        # Save transaction in DB (add period to notes since we don't have a period column)
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO subscription_transactions
+                INSERT INTO subscription_transactions 
                 (user_id, plan, amount, razorpay_order_id, status, created_at)
                 VALUES (%s, %s, %s, %s, 'pending', %s)
-            """, [user_id, plan, prices[plan]/100, order['id'], datetime.datetime.now()])
+            """, [user_id, plan, PRICES[plan][period]/100, order['id'], datetime.datetime.now()])
 
         return JsonResponse({
             'order_id': order['id'],
@@ -123,8 +161,9 @@ def verify_payment(request):
         razorpay_payment_id = data.get('razorpay_payment_id')
         razorpay_signature = data.get('razorpay_signature')
         plan = data.get('plan')
+        period = data.get('period')
         
-        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature, plan]):
+        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature, plan, period]):
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
 
         # Verify payment signature
@@ -164,12 +203,32 @@ def verify_payment(request):
                 WHERE razorpay_order_id = %s AND user_id = %s
             """, [razorpay_payment_id, datetime.datetime.now(), razorpay_order_id, user_id])
 
-        # Activate subscription
+        # Calculate subscription dates
         start_date = datetime.date.today()
-        end_date = start_date + datetime.timedelta(days=30)
-        credits = {'basic': 10, 'pro': 100, 'premium': 9999}
-
+        days_to_add = PERIOD_DAYS[period]
+        
+        # Check if user has existing subscription and extend it
         with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT subscription_end_date, remaining_credits 
+                FROM users WHERE user_id = %s
+            """, [user_id])
+            user_data = cursor.fetchone()
+            
+            current_end_date = user_data[0] if user_data else None
+            current_credits = user_data[1] if user_data else 0
+            
+            # If user has an active subscription, extend from current end date
+            if current_end_date and current_end_date > start_date:
+                new_end_date = current_end_date + datetime.timedelta(days=days_to_add)
+            else:
+                new_end_date = start_date + datetime.timedelta(days=days_to_add)
+            
+            # Calculate new credits (add monthly credits for the period)
+            months_in_period = days_to_add // 30
+            new_credits = current_credits + (CREDITS[plan] * months_in_period)
+
+            # Update user subscription
             cursor.execute("""
                 UPDATE users
                 SET plan = %s,
@@ -177,26 +236,34 @@ def verify_payment(request):
                     subscription_start_date = %s,
                     subscription_end_date = %s
                 WHERE user_id = %s
-            """, [plan, credits[plan], start_date, end_date, user_id])
+            """, [plan, new_credits, start_date, new_end_date, user_id])
             
-            cursor.execute(
-            "SELECT email FROM users WHERE user_id=%s",
-             [user_id]
-            )
+            # Get user email for notification
+            cursor.execute("SELECT email, name FROM users WHERE user_id = %s", [user_id])
             result = cursor.fetchone()
-
             if result:
-                 email = result[0]
+                email = result[0]
+                name = result[1]
 
-            # -------------------- Apply pending referral reward --------------------
+            # Apply pending referral reward
             apply_pending_referral_reward(user_id)
             
-            subject = "Your MachMate Subscription is Active"
+            # Send confirmation email
+            period_name = period.replace('_', ' ').title()
+            subject = f"Your MachMate {plan.title()} Subscription is Active"
             message = f"""
-            Hi,
+            Hi {name},
 
-            Thank you for purchasing the {plan} subscription with MachMate.
-            Your subscription is valid for A Month.
+            Thank you for purchasing the {plan.title()} subscription with MachMate for {period_name}.
+            Your subscription is valid until {new_end_date.strftime('%B %d, %Y')}.
+
+            You now have {new_credits} quotation credits available.
+
+            Plan Details:
+            - Plan: {plan.title()}
+            - Duration: {period_name}
+            - Credits: {new_credits} quotations
+            - Valid Until: {new_end_date.strftime('%B %d, %Y')}
 
             Enjoy all the premium features 🚀
 
@@ -205,12 +272,24 @@ def verify_payment(request):
             """
             send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)
 
-
-        return JsonResponse({'success': True, 'message': 'Subscription activated!'})
+        return JsonResponse({
+            'success': True, 
+            'message': 'Subscription activated!',
+            'end_date': new_end_date.strftime('%Y-%m-%d'),
+            'remaining_credits': new_credits
+        })
         
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
+        # Update transaction status to failed in case of any error
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE subscription_transactions
+                SET status = 'failed', updated_at = %s
+                WHERE razorpay_order_id = %s AND user_id = %s
+            """, [datetime.datetime.now(), razorpay_order_id, user_id])
+        
         return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
 
 
@@ -226,11 +305,14 @@ def cancel_subscription(request):
     with connection.cursor() as cursor:
         cursor.execute("""
             UPDATE users
-            SET plan = 'none', subscription_end_date = NULL
+            SET plan = 'none', 
+                subscription_start_date = NULL,
+                subscription_end_date = NULL,
+                remaining_credits = 0
             WHERE user_id = %s
         """, [user_id])
 
-    return JsonResponse({'success': True, 'message': 'Subscription will be canceled after current period'})
+    return JsonResponse({'success': True, 'message': 'Subscription cancelled successfully'})
 
 
 @csrf_exempt
@@ -243,12 +325,30 @@ def check_credits(request):
         return JsonResponse({'error': 'User not authenticated'}, status=401)
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT remaining_credits FROM users WHERE user_id = %s", [user_id])
+        cursor.execute("""
+            SELECT remaining_credits, subscription_end_date 
+            FROM users WHERE user_id = %s
+        """, [user_id])
         row = cursor.fetchone()
-        has_credits = row[0] > 0 if row else False
-    
-    
-    return JsonResponse({'has_credits': has_credits})
+        
+        if row:
+            remaining_credits = row[0]
+            end_date = row[1]
+            
+            # Check if subscription is still active
+            is_active = end_date and end_date >= datetime.date.today()
+            has_credits = remaining_credits > 0 and is_active
+            
+            return JsonResponse({
+                'has_credits': has_credits,
+                'remaining_credits': remaining_credits,
+                'is_active': is_active,
+                'end_date': str(end_date) if end_date else None
+            })
+        
+    return JsonResponse({'error': 'User not found'}, status=404)
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def use_credit(request):
@@ -293,8 +393,6 @@ def use_credit(request):
                 WHERE user_id = %s AND remaining_credits > 0
             """, [user_id])
             
-            connection.commit()
-            
             # Fetch updated credits
             cursor.execute("SELECT remaining_credits FROM users WHERE user_id = %s", [user_id])
             result = cursor.fetchone()
@@ -312,10 +410,40 @@ def use_credit(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
 
-# ------------------------------
-# Apply pending referral reward
-# ------------------------------
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def subscription_history(request):
+    """Get user's subscription transaction history"""
+    user_id = request.session.get("user_id")
+    
+    if not user_id:
+        return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT plan, amount, status, created_at, razorpay_order_id, razorpay_payment_id
+            FROM subscription_transactions 
+            WHERE user_id = %s 
+            ORDER BY created_at DESC
+        """, [user_id])
+        
+        transactions = []
+        for row in cursor.fetchall():
+            transactions.append({
+                'plan': row[0],
+                'amount': float(row[1]),
+                'status': row[2],
+                'created_at': str(row[3]),
+                'order_id': row[4],
+                'payment_id': row[5]
+            })
+
+    return JsonResponse({'transactions': transactions})
+
+
 def apply_pending_referral_reward(user_id):
+    """Apply referral rewards when user subscribes"""
     with connection.cursor() as cursor:
         # Check if user has pending referral reward
         cursor.execute("""
@@ -323,6 +451,7 @@ def apply_pending_referral_reward(user_id):
             WHERE user_id = %s AND applied = 0
         """, [user_id])
         row = cursor.fetchone()
+        
         if row:
             referrer_id = row[0]
 
@@ -331,10 +460,11 @@ def apply_pending_referral_reward(user_id):
                 SELECT subscription_end_date, remaining_credits FROM users WHERE user_id=%s
             """, [user_id])
             plan_data = cursor.fetchone()
+            
             if plan_data:
                 end_date, remaining_credits = plan_data
                 if end_date:
-                    new_end_date = datetime.datetime.strptime(str(end_date), "%Y-%m-%d") + datetime.timedelta(days=15)
+                    new_end_date = end_date + datetime.timedelta(days=15)
                 else:
                     new_end_date = datetime.date.today() + datetime.timedelta(days=15)
 
@@ -350,10 +480,11 @@ def apply_pending_referral_reward(user_id):
                 SELECT subscription_end_date, remaining_credits FROM users WHERE user_id=%s
             """, [referrer_id])
             ref_data = cursor.fetchone()
+            
             if ref_data:
                 ref_end_date, ref_credits = ref_data
                 if ref_end_date:
-                    new_ref_end_date = datetime.datetime.strptime(str(ref_end_date), "%Y-%m-%d") + datetime.timedelta(days=15)
+                    new_ref_end_date = ref_end_date + datetime.timedelta(days=15)
                 else:
                     new_ref_end_date = datetime.date.today() + datetime.timedelta(days=15)
 
