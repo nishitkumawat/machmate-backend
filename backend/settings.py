@@ -24,6 +24,7 @@ ALLOWED_HOSTS = [
     "www.machmate.in",
     "app.machmate.in",
     "api.machmate.in",
+    "mm-backend-5fz4.onrender.com",
 ]
 
 # Application definition
@@ -70,6 +71,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://app.machmate.in",
     "https://api.machmate.in",
     "https://machmate.in",
+    "https://mm-backend-5fz4.onrender.com",
+    
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
@@ -90,6 +93,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://app.machmate.in",
     "https://api.machmate.in",
     "https://machmate.in",
+    "https://mm-backend-5fz4.onrender.com",
 ]
 
 # ----------------------------
