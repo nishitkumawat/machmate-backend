@@ -7,6 +7,15 @@ from django.db import connection
 from django.conf import settings
 from django.views.decorators.http import require_http_methods
 from django.core.mail import send_mail
+import requests
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
+INTEGRATED_NUMBER = os.getenv("INTEGRATED_NUMBER")
+
 
 # Setup Razorpay client
 razorpay_client = razorpay.Client(
@@ -239,11 +248,12 @@ def verify_payment(request):
             """, [plan, new_credits, start_date, new_end_date, user_id])
             
             # Get user email for notification
-            cursor.execute("SELECT email, name FROM users WHERE user_id = %s", [user_id])
+            cursor.execute("SELECT email, name,phone FROM users WHERE user_id = %s", [user_id])
             result = cursor.fetchone()
             if result:
                 email = result[0]
                 name = result[1]
+                phone = result[2]
 
             # Apply pending referral reward
             apply_pending_referral_reward(user_id)
@@ -271,7 +281,58 @@ def verify_payment(request):
             Team MachMate
             """
             send_mail(subject, message, "noreply@machmate.in", [email], fail_silently=False)
+            url = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/"
 
+            headers = {
+                "Content-Type": "application/json",
+                "authkey": MSG91_AUTH_KEY
+            }
+
+            payload = {
+                "integrated_number": INTEGRATED_NUMBER,
+                "content_type": "template",
+                "payload": {
+                    "messaging_product": "whatsapp",
+                    "type": "template",
+                    "template": {
+                        "name": "payment_success_subscription",
+                        "language": {
+                            "code": "en_US",
+                            "policy": "deterministic"
+                        },
+                        "namespace": "7482ecae_8cc7_41ff_b279_6b574570c636",
+                        "to_and_components": [
+                            {
+                                "to": [f"91{phone}"],
+                                "components": {
+                                    "body_1": {
+                                        "type": "text",
+                                        "value": name
+                                    },
+                                    "body_2": {
+                                        "type": "text",
+                                        "value": f"Rs. {PRICES[plan][period]}"
+                                    },
+                                    "body_3": {
+                                        "type": "text",
+                                        "value": ""
+                                    },
+                                    "body_4": {
+                                        "type": "text",
+                                        "value": plan
+                                    },
+                                    "body_5": {
+                                        "type": "text",
+                                        "value": new_end_date.strftime('%B %d, %Y')
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+
+            response = requests.post(url, json=payload, headers=headers)
         return JsonResponse({
             'success': True, 
             'message': 'Subscription activated!',

@@ -5,6 +5,15 @@ from django.db import connection
 import json
 from django.views.decorators.http import require_http_methods
 from django.core.mail import send_mail
+import requests
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
+INTEGRATED_NUMBER = os.getenv("INTEGRATED_NUMBER")
+TEMPLATE_NAME = os.getenv("TEMPLATE_NAME")
 
 
 # Helper to execute SELECT queries
@@ -323,9 +332,23 @@ def accept_quotation(request, quotation_id):
 
                 if result:
                     user_type = result[0]
+                    
+        with connection.cursor() as cursor:
+                cursor.execute(
+                        "SELECT name, email,phone FROM users WHERE user_id=%s",
+                        [maker_id]
+                    )
+                result = cursor.fetchone()
+
+                if result:
+                    maker_name, maker_email,maker_phone = result[0], result[1],result[2]
+                    
             
         subject = "A Customer Accepted Your Quotation"
         if user_type == "basic" or user_type == "pro":  # free or no plan
+            var_email = "" 
+            var_name = "Upgrade to Premium to get Buyer Details."
+            var_phone = "Only Premium users get Direct contact to Buyer."
             message = f"""
             Hi,
 
@@ -339,6 +362,9 @@ def accept_quotation(request, quotation_id):
             Team MachMate
             """
         else:  # premium
+            var_name = f"Name : {name}"
+            var_email = f"Email : {email}" 
+            var_phone = f"Phone : {phone}"
             message = f"""
             Hi,
 
@@ -356,8 +382,111 @@ def accept_quotation(request, quotation_id):
             Team MachMate
             """
 
-        send_mail(subject, message, "noreply@machmate.com", [email], fail_silently=False)
+        send_mail(subject, message, "noreply@machmate.com", [maker_email], fail_silently=False)
         
+        # To Machine Maker
+        url = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/"
+
+        headers = {
+            "Content-Type": "application/json",
+            "authkey": MSG91_AUTH_KEY
+        }
+
+        payload = {
+            "integrated_number": INTEGRATED_NUMBER,
+            "content_type": "template",
+            "payload": {
+                "messaging_product": "whatsapp",
+                "type": "template",
+                "template": {
+                    "name": "quotation_accepted",
+                    "language": {
+                        "code": "en_US",
+                        "policy": "deterministic"
+                    },
+                    "namespace": "7482ecae_8cc7_41ff_b279_6b574570c636",
+                    "to_and_components": [
+                        {
+                            "to": [f"91{maker_phone}"],
+                            "components": {
+                                "body_1": {
+                                    "type": "text",
+                                    "value": name
+                                },
+                                "body_2": {
+                                    "type": "text",
+                                    "value": q_data["title"]
+                                },
+                                "body_3": {
+                                    "type": "text",
+                                    "value": var_name
+                                },
+                                "body_4": {
+                                    "type": "text",
+                                    "value": var_phone
+                                },
+                                "body_5": {
+                                    "type": "text",
+                                    "value": var_email
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+        
+        # TO Buyer
+        url = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/"
+
+        headers = {
+            "Content-Type": "application/json",
+            "authkey": MSG91_AUTH_KEY
+        }
+
+        payload = {
+            "integrated_number": INTEGRATED_NUMBER,
+            "content_type": "template",
+            "payload": {
+                "messaging_product": "whatsapp",
+                "type": "template",
+                "template": {
+                    "name": "to_contact_machinemaker",
+                    "language": {
+                        "code": "en_US",
+                        "policy": "deterministic"
+                    },
+                    "namespace": "7482ecae_8cc7_41ff_b279_6b574570c636",
+                    "to_and_components": [
+                        {
+                            "to": [f"91{phone}"],
+                            "components": {
+                                "body_1": {
+                                    "type": "text",
+                                    "value": name
+                                },
+                                "body_2": {
+                                    "type": "text",
+                                    "value": maker_name
+                                },
+                                "body_3": {
+                                    "type": "text",
+                                    "value": maker_phone
+                                },
+                                "body_4": {
+                                    "type": "text",
+                                    "value": "Not Available"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
         return JsonResponse({"message": "Quotation accepted, project marked as completed"}, status=200)
 
     except Exception as e:
