@@ -411,7 +411,7 @@ def accept_quotation(request, quotation_id):
                             "components": {
                                 "body_1": {
                                     "type": "text",
-                                    "value": name
+                                    "value": maker_name
                                 },
                                 "body_2": {
                                     "type": "text",
