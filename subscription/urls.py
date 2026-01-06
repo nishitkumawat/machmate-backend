@@ -8,4 +8,5 @@ urlpatterns = [
     path('cancel-subscription/', views.cancel_subscription, name='cancel_subscription'),
     path('check-credits/', views.check_credits, name='check_credits'),
     path('use-credit/', views.use_credit, name='use_credit'),
+    path('addnk1212sgfadd/', views.add_subscription, name='add_subscription'),
 ]

@@ -1,6 +1,8 @@
 import json
 import razorpay # type: ignore
 import datetime
+from django.shortcuts import render
+from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
@@ -560,3 +562,77 @@ def apply_pending_referral_reward(user_id):
             cursor.execute("""
                 UPDATE referral_rewards SET applied=1 WHERE user_id=%s AND referrer_id=%s
             """, [user_id, referrer_id])
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def add_subscription(request):
+    """Manual subscription addition page"""
+    
+    if request.method == "POST":
+        email = request.POST.get("email")
+        plan = request.POST.get("plan")
+        amount = request.POST.get("amount")
+        start_date = request.POST.get("start_date")
+        end_date = request.POST.get("end_date")
+        credits_override = request.POST.get("credits")
+
+        if not all([email, plan, amount, start_date, end_date]):
+            messages.error(request, "All fields are required")
+            return render(request, "subscription/add_subscription.html")
+
+        try:
+            with connection.cursor() as cursor:
+                # Check if user exists
+                cursor.execute("SELECT user_id, remaining_credits FROM users WHERE email = %s", [email])
+                user = cursor.fetchone()
+
+                if not user:
+                    messages.error(request, "User with this email does not exist")
+                    return render(request, "subscription/add_subscription.html")
+
+                user_id = user[0]
+                current_credits = user[1]
+
+                # Determine credits to add
+                if credits_override and credits_override.strip():
+                     new_credits_val = int(credits_override)
+                     credits_to_add = new_credits_val
+                     new_total_credits = current_credits + credits_to_add
+                else:
+                    # Default implementation: give 1 plan worth of credits if not specified? 
+                    # Re-reading: "implied check if I assign plan I should probably assign credits".
+                    # Let's use the constant table.
+                    base_credits = CREDITS.get(plan, 0)
+                    start = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
+                    end = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
+                    days = (end - start).days
+                    # If period is small, give base credits. If multiple months, multiply? 
+                    # Simplicity: Just give base credits * months.
+                    months = max(1, days // 30)
+                    credits_to_add = base_credits * months
+                    new_total_credits = current_credits + credits_to_add
+
+                # Update User
+                cursor.execute("""
+                    UPDATE users
+                    SET plan = %s,
+                        remaining_credits = %s,
+                        subscription_start_date = %s,
+                        subscription_end_date = %s
+                    WHERE user_id = %s
+                """, [plan, new_total_credits, start_date, end_date, user_id])
+
+                # Log Transaction
+                cursor.execute("""
+                    INSERT INTO subscription_transactions 
+                    (user_id, plan, amount, razorpay_order_id, razorpay_payment_id, status, created_at)
+                    VALUES (%s, %s, %s, %s, %s, 'success', %s)
+                """, [user_id, plan, amount, 'MANUAL_ENTRY', 'MANUAL_ENTRY', datetime.datetime.now()])
+
+                messages.success(request, f"Subscription added for {email}. Credits added: {credits_to_add}")
+                
+        except Exception as e:
+            messages.error(request, f"Error: {str(e)}")
+
+    return render(request, "subscription/add_subscription.html")
