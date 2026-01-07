@@ -598,7 +598,7 @@ def add_subscription(request):
                 if credits_override and credits_override.strip():
                      new_credits_val = int(credits_override)
                      credits_to_add = new_credits_val
-                     new_total_credits = current_credits + credits_to_add
+                     new_total_credits =  credits_to_add
                 else:
                     # Default implementation: give 1 plan worth of credits if not specified? 
                     # Re-reading: "implied check if I assign plan I should probably assign credits".
@@ -611,7 +611,7 @@ def add_subscription(request):
                     # Simplicity: Just give base credits * months.
                     months = max(1, days // 30)
                     credits_to_add = base_credits * months
-                    new_total_credits = current_credits + credits_to_add
+                    new_total_credits = credits_to_add
 
                 # Update User
                 cursor.execute("""

@@ -523,7 +523,15 @@ def product_details(request, product_id):
         user_id = request.session.get("user_id")
         
         with connection.cursor() as cursor:
-            # Get product details
+            # Get viewer's plan if logged in
+            viewer_plan = "none"
+            if user_id:
+                cursor.execute("SELECT plan FROM users WHERE user_id = %s", [user_id])
+                viewer_row = cursor.fetchone()
+                if viewer_row:
+                    viewer_plan = viewer_row[0]
+
+            # Get product details with Uploader's info and Company details
             product_query = """
                 SELECT 
                     lw.work_id AS id,
@@ -540,9 +548,15 @@ def product_details(request, product_id):
                     u.user_id AS uploaded_by_id,
                     u.phone,
                     u.email,
-                    COALESCE(u.plan, 'none') AS subscription_plan
+                    COALESCE(u.plan, 'none') AS subscription_plan,
+                    mcd.company_name,
+                    mcd.address AS company_address,
+                    mcd.city AS company_city,
+                    mcd.state AS company_state,
+                    mcd.website AS company_website
                 FROM listed_work lw
                 JOIN users u ON lw.user_id = u.user_id
+                LEFT JOIN maker_company_details mcd ON u.user_id = mcd.maker_id
                 WHERE lw.work_id = %s AND lw.status = 'active'
             """
             cursor.execute(product_query, [product_id])
@@ -555,8 +569,8 @@ def product_details(request, product_id):
             columns = [col[0] for col in cursor.description]
             product_data = dict(zip(columns, product_rows[0]))
             
-            # Check if user is premium
-            is_premium_user = product_data.get("subscription_plan") == "premium"
+            # Check if UPLOADER is premium (for other logic if needed, but requested logic is about VIEWER)
+            uploader_is_premium = product_data.get("subscription_plan") == "premium"
             
             # Get quotations for this product
             quotations_query = """
@@ -618,15 +632,28 @@ def product_details(request, product_id):
             "city": product_data["city"],
             "state": product_data["state"],
             "uploaded_by_name": product_data["uploaded_by_name"],
-            "is_premium_user": is_premium_user,
+            "is_premium_user": uploader_is_premium, # Kept for backward compatibility if frontend uses it
             "quotations": quotations,
-            "user_quotation": user_quotation
+            "user_quotation": user_quotation,
+            "viewer_plan": viewer_plan # Helpful for frontend debugging
         }
         
-        # Add contact info for premium users
-        if is_premium_user and product_data["phone"] and product_data["email"]:
-            response_data["phone_number"] = product_data["phone"]
-            response_data["email"] = product_data["email"]
+        # Add Work Seeker Details IF Viewer is Premium
+        if viewer_plan == "premium":
+            response_data["work_seeker_details"] = {
+                "display_name": product_data["uploaded_by_name"],
+                "company_name": product_data["company_name"],
+                "company_address": product_data["company_address"],
+                "company_city": product_data["company_city"],
+                "company_state": product_data["company_state"],
+                "phone_number": product_data["phone"],
+                "email": product_data["email"],
+                "website": product_data["company_website"]
+            }
+        
+        # Legacy support: old logic added phone/email if UPLOADER was premium. 
+        # The request specifically asks for "only for plan = premium user" (implies viewer).
+        # I'll keep the response_data clean and use `work_seeker_details` key.
         
         return JsonResponse(response_data)
         
