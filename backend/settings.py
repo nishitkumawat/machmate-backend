@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
+from corsheaders.defaults import default_headers
 
 # Load environment variables
 load_dotenv()
@@ -92,17 +93,9 @@ CORS_ALLOW_METHODS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
-]
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_HEADERS = True
+CORS_ALLOW_HEADERS = list(default_headers)
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 
 CSRF_TRUSTED_ORIGINS = [
