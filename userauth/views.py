@@ -11,6 +11,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 import uuid
 from datetime import datetime, timedelta
+from .models import EmailOTP
+from django.utils import timezone
 
 # ------------------------------
 # Generate unique referral code
@@ -485,23 +487,40 @@ def send_email_otp(request):
             [email],
             fail_silently=False,
         )
-        print(otp)
+        EmailOTP.objects.update_or_create(
+            email=email,
+            defaults={"otp": otp, "created_at": timezone.now()}
+        )
         return Response({"success": True, "message": "OTP sent successfully"}, status=200)
     except Exception as e:
         return Response({"success": False, "message": str(e)}, status=500)
 
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def verify_email_otp(request):
-    email = request.data.get("email")
-    otp = request.data.get("otp")
+    email = request.data.get("email", "").strip().lower()
+    otp = str(request.data.get("otp")).strip()
+
     if not email or not otp:
         return Response({"success": False, "error": "Email and OTP are required"}, status=400)
 
-    if email in otp_storage and otp_storage[email] == otp:
-        del otp_storage[email]
-        return Response({"success": True, "message": "Email verified successfully"}, status=200)
-    return Response({"success": False, "error": "Invalid OTP"}, status=400)
+    try:
+        record = EmailOTP.objects.get(email=email)
+
+        # ⏱ Expiry check (5 minutes)
+        if timezone.now() - record.created_at > timedelta(minutes=5):
+            record.delete()
+            return Response({"success": False, "error": "OTP expired"}, status=400)
+
+        if record.otp == otp:
+            record.delete()
+            return Response({"success": True, "message": "Email verified successfully"}, status=200)
+
+        return Response({"success": False, "error": "Invalid OTP"}, status=400)
+
+    except EmailOTP.DoesNotExist:
+        return Response({"success": False, "error": "OTP not found"}, status=400)
 
 
 # ------------------------------

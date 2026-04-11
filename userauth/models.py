@@ -23,3 +23,8 @@ class Users(models.Model):
 
     def __str__(self):
         return self.name
+
+class EmailOTP(models.Model):
+    email = models.EmailField(unique=True)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now=True)
