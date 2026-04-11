@@ -67,15 +67,30 @@ ROOT_URLCONF = "backend.urls"
 # ----------------------------
 # CORS & CSRF Settings
 # ----------------------------
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "https://app.machmate.in",
-    "https://api.machmate.in",
-    "https://be.machmate.in",
-    "https://machmate.in",
-    "https://mm-backend-5fz4.onrender.com",
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:5173",
+#     "https://app.machmate.in",
+#     "https://api.machmate.in",
+#     "https://be.machmate.in",
+#     "https://machmate.in",
+#     "https://mm-backend-5fz4.onrender.com",
     
+# ]
+CORS_ALLOWED_ORIGINS = [
+    "https://machmate.in",
+    "https://www.machmate.in",
+    "https://app.machmate.in",
 ]
+
+CORS_ALLOW_METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+]
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -91,12 +106,8 @@ CORS_ALLOW_HEADERS = [
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "https://app.machmate.in",
-    "https://api.machmate.in",
-    "https://be.machmate.in",
     "https://machmate.in",
-    "https://mm-backend-5fz4.onrender.com",
+    "https://www.machmate.in",
 ]
 
 # ----------------------------
