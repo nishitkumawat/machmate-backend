@@ -10,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from datetime import datetime, timedelta
 
 
 # Helpers
@@ -94,6 +95,23 @@ def maker_company_details(request):
                 ]
             
             execute_query(query, params)
+            
+            # Automatically assign Premium Plan if the maker just added their company profile
+            today = datetime.now()
+            next_year = today + timedelta(days=365)
+            # Update user plan
+            execute_query(
+                "UPDATE users SET plan=%s, remaining_credits=%s, subscription_start_date=%s, subscription_end_date=%s WHERE user_id=%s",
+                ['premium', 9999, today.date(), next_year.date(), user_id]
+            )
+            # Prevent logging multiple times by checking if it already exists or just logging "COMPANY_ADD_PREMIUM"
+            # It's an INSERT into subscription_transactions
+            execute_query(
+                "INSERT INTO subscription_transactions (user_id, plan, amount, razorpay_order_id, razorpay_payment_id, status, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                [user_id, 'premium', 0, 'ONBOARDING_FREE', 'ONBOARDING_FREE', 'success', today]
+            )
+            
             return JsonResponse({"message": "Company details saved successfully"})
 
         except json.JSONDecodeError:
