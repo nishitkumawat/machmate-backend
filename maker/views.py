@@ -552,11 +552,12 @@ def product_details(request, product_id):
                     mcd.company_name,
                     mcd.address AS company_address,
                     mcd.city AS company_city,
-                    mcd.state AS company_state
+                    mcd.state AS company_state,
+                    mcd.website AS company_website
                 FROM listed_work lw
                 JOIN users u ON lw.user_id = u.user_id
                 LEFT JOIN maker_company_details mcd ON u.user_id = mcd.maker_id
-                WHERE lw.work_id = %s AND lw.status = 'active'
+                WHERE lw.work_id = %s
             """
             cursor.execute(product_query, [product_id])
             product_rows = cursor.fetchall()
