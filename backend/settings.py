@@ -6,7 +6,6 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
-from corsheaders.defaults import default_headers
 
 # Load environment variables
 load_dotenv()
@@ -82,7 +81,6 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.machmate.in",
     "https://app.machmate.in",
 ]
-
 CORS_ALLOW_METHODS = [
     "GET",
     "POST",
@@ -93,14 +91,26 @@ CORS_ALLOW_METHODS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOW_ALL_HEADERS = True
-CORS_ALLOW_HEADERS = list(default_headers)
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "https://app.machmate.in",
+    "https://vps.machmate.in",
+    "https://be.machmate.in",
     "https://machmate.in",
-    "https://www.machmate.in",
+    "https://mm-backend-5fz4.onrender.com",
 ]
 
 # ----------------------------
