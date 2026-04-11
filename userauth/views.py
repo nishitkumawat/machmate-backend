@@ -81,6 +81,20 @@ def register_view(request):
                 [name, email, phone, hashed_pw, role, referral_code, referred_by]
             )
             new_user_id = cursor.lastrowid
+            
+            # Automatically assign Premium Plan
+            today = datetime.now()
+            next_year = today + timedelta(days=365)
+            cursor.execute(
+                "UPDATE users SET plan=%s, remaining_credits=%s, subscription_start_date=%s, subscription_end_date=%s WHERE user_id=%s",
+                ['premium', 9999, today.date(), next_year.date(), new_user_id]
+            )
+            # Log as a free sign-up transaction
+            cursor.execute(
+                "INSERT INTO subscription_transactions (user_id, plan, amount, razorpay_order_id, razorpay_payment_id, status, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                [new_user_id, 'premium', 0, 'SIGNUP_FREE', 'SIGNUP_FREE', 'success', today]
+            )
            
             # ------------------ Reward logic ------------------
             if referred_by:
