@@ -24,7 +24,7 @@ ALLOWED_HOSTS = [
     "machmate.in",
     "www.machmate.in",
     "app.machmate.in",
-    "api.machmate.in",
+    "vps.machmate.in",
     "mm-backend-5fz4.onrender.com",
     "be.machmate.in"
 ]
@@ -71,7 +71,7 @@ ROOT_URLCONF = "backend.urls"
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:5173",
 #     "https://app.machmate.in",
-#     "https://api.machmate.in",
+#     "https://vps.machmate.in",
 #     "https://be.machmate.in",
 #     "https://machmate.in",
 #     "https://mm-backend-5fz4.onrender.com",
