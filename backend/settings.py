@@ -67,20 +67,20 @@ ROOT_URLCONF = "backend.urls"
 # ----------------------------
 # CORS & CSRF Settings
 # ----------------------------
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:5173",
-#     "https://app.machmate.in",
-#     "https://vps.machmate.in",
-#     "https://be.machmate.in",
-#     "https://machmate.in",
-#     "https://mm-backend-5fz4.onrender.com",
-    
-# ]
 CORS_ALLOWED_ORIGINS = [
     "https://machmate.in",
     "https://www.machmate.in",
     "https://app.machmate.in",
 ]
+
+# Add localhost origins in DEBUG mode
+if DEBUG:
+    CORS_ALLOWED_ORIGINS += [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+    ]
+
 CORS_ALLOW_METHODS = [
     "GET",
     "POST",
@@ -105,7 +105,6 @@ CORS_ALLOW_HEADERS = [
 CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
     "https://app.machmate.in",
     "https://vps.machmate.in",
     "https://be.machmate.in",
@@ -113,15 +112,35 @@ CSRF_TRUSTED_ORIGINS = [
     "https://mm-backend-5fz4.onrender.com",
 ]
 
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS += [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
 # ----------------------------
 # Session & CSRF cookies
 # ----------------------------
-SESSION_COOKIE_DOMAIN = ".machmate.in"
-CSRF_COOKIE_DOMAIN = ".machmate.in"
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SAMESITE = "None"
+if DEBUG:
+    # Local dev: no domain restriction, no HTTPS requirement.
+    # SameSite=None allows cookies to be sent on cross-origin requests
+    # (e.g. localhost:5173 → 127.0.0.1:8000). Chrome makes a special
+    # exception for 127.0.0.1 and does NOT require Secure for SameSite=None.
+    SESSION_COOKIE_DOMAIN = None
+    CSRF_COOKIE_DOMAIN = None
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SAMESITE = "None"
+    CSRF_COOKIE_SAMESITE = "None"
+else:
+    # Production: lock cookies to the machmate.in domain over HTTPS
+    SESSION_COOKIE_DOMAIN = ".machmate.in"
+    CSRF_COOKIE_DOMAIN = ".machmate.in"
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "None"
+    CSRF_COOKIE_SAMESITE = "None"
+
 SESSION_COOKIE_NAME = "machmate_sessionid"
 CSRF_COOKIE_NAME = "machmate_csrftoken"
 
