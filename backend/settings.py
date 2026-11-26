@@ -167,6 +167,8 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # ----------------------------
 # Database
 # ----------------------------
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
@@ -176,7 +178,7 @@ DATABASES = {
         "HOST": os.getenv("DB_HOST"),
         "PORT": os.getenv("DB_PORT"),
         "OPTIONS": {
-            "ssl": {"ca": os.path.join(BASE_DIR, "ca.pem")},
+            "ssl_mode": "REQUIRED",
         },
     }
 }

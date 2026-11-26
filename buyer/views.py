@@ -89,10 +89,42 @@ def create_project(request):
             (user_id, title, description, estimated_price, estimated_date, address, state, city, pdf_report)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        execute_query(query, [user_id, name, description, maxPrice, estimatedDate, address, state, city, pdf_url])
+        whatsapp_msg = f"""
 
+🛠 *Project Title:* {name}
+
+📝 *Description:* {description}
+
+💰 *Estimated Budget:* ₹{maxPrice}
+
+📅 *Expected Completion:* {estimatedDate}
+
+📍 *Location:* {city}, {state}
+
+
+🤝 If you are interested in this project, please visit our site machmate.in
+
+— Team MachMate
+        """
+        execute_query(query, [user_id, name, description, maxPrice, estimatedDate, address, state, city, pdf_url])
+        notify_vendors_bulk(whatsapp_msg)
         return JsonResponse({"message": "Project created", "pdf_url": pdf_url}, status=201)
 
+def notify_vendors_bulk(base_message):
+    vendors = fetch_all("SELECT phone, name FROM users WHERE role='maker'")
+
+    values = [
+        (base_message, v["phone"], v["name"])
+        for v in vendors
+    ]
+
+    query = """
+        INSERT INTO whatsapp_queue (message, phone, user_name)
+        VALUES (%s, %s, %s)
+    """
+
+    with connection.cursor() as cursor:
+        cursor.executemany(query, values)
 
 @csrf_exempt
 def update_project(request, project_id):
@@ -350,39 +382,39 @@ def accept_quotation(request, quotation_id):
             var_name = "Upgrade to Premium to get Buyer Details."
             var_phone = "Only Premium users get Direct contact to Buyer."
             message = f"""
-            Hi,
+Hi,
 
-            A customer has accepted your quotation on MachMate.
-            Since your plan does not provide you the Direct contact to the Buyer,
-            Please wait for Buyer to connect you.
+A customer has accepted your quotation on MachMate.
+Since your plan does not provide you the Direct contact to the Buyer,
+Please wait for Buyer to connect you.
 
-            
 
-            Regards,
-            Team MachMate
+
+Regards,
+Team MachMate
             """
         else:  # premium
             var_name = f"Name : {name}"
             var_email = f"Email : {email}" 
             var_phone = f"Phone : {phone}"
             message = f"""
-            Hi,
+Hi,
 
-            A customer has accepted your quotation on MachMate.
-            Since you are a Premium user, you can contact them directly.
+A customer has accepted your quotation on MachMate.
+Since you are a Premium user, you can contact them directly.
 
-            Customer Details:
-            Name: {name}
-            Email: {email}
-            Phone: {phone}
+Customer Details:
+Name: {name}
+Email: {email}
+Phone: {phone}
 
-            Reach out now and close the deal ✅
+Reach out now and close the deal ✅
 
-            Regards,
-            Team MachMate
+Regards,
+Team MachMate
             """
 
-        send_mail(subject, message, "noreply@machmate.com", [maker_email], fail_silently=False)
+        send_mail(subject, message, "machmate.contact@gmail.com", [maker_email], fail_silently=False)
         
         # To Machine Maker
         url = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/"
